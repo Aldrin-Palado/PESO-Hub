@@ -66,7 +66,7 @@ export default function AIChatbotModule({
       return;
     }
 
-    let resume: { fileName: string; data: string } | undefined;
+    let resumeForRequest: File | undefined;
     if (resumeFile) {
       if (resumeFile.size > maxResumeBytes) {
         setError("Resume files must be 500 KB or smaller.");
@@ -84,12 +84,7 @@ export default function AIChatbotModule({
           setError("The file contents do not match a valid PDF, DOC, or DOCX resume.");
           return;
         }
-        let binary = "";
-        const chunkSize = 0x8000;
-        for (let index = 0; index < bytes.length; index += chunkSize) {
-          binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
-        }
-        resume = { fileName: resumeFile.name, data: btoa(binary) };
+        resumeForRequest = resumeFile;
       } catch (requestError) {
         console.error("Could not read the selected resume:", requestError);
         setError("Could not read the selected resume. Please choose the file again.");
@@ -114,7 +109,7 @@ export default function AIChatbotModule({
     try {
       const result = await invokePesoAI<{ reply: string; jobs?: ChatJob[] }>("chat", {
         messages: nextMessages.slice(-6),
-        ...(resume ? { resume } : {}),
+        ...(resumeForRequest ? { resume: resumeForRequest } : {}),
       });
       setMessages((current) => [
         ...current,
