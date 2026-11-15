@@ -22,28 +22,40 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const [captchaToken, setCaptchaToken] = useState("");
   const [captchaResetKey, setCaptchaResetKey] = useState(0);
-  const [captchaRequested, setCaptchaRequested] = useState(false);
-  const [captchaIntent, setCaptchaIntent] = useState<"password" | "google">("password");
   const [oauthLoading, setOauthLoading] = useState(false);
   const [oauthError, setOauthError] = useState("");
+
+  const resetCaptcha = () => {
+    setCaptchaToken("");
+    setCaptchaResetKey((current) => current + 1);
+  };
 
   const signInWithGoogle = async () => {
     if (loading || oauthLoading) return;
     if (!captchaToken) {
-      setCaptchaIntent("google");
-      setCaptchaRequested(true);
       return;
     }
     setOauthError("");
     setOauthLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
-    if (error) {
-      setOauthError(error.message);
-      setCaptchaToken("");
-      setCaptchaResetKey((current) => current + 1);
+    try {
+      const { error: captchaError } = await supabase.functions.invoke(
+        "captcha-auth",
+        { body: { mode: "verify", captchaToken } },
+      );
+      if (captchaError) {
+        throw new Error("CAPTCHA verification failed. Please try again.");
+      }
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (error) throw error;
+    } catch (error) {
+      setOauthError(
+        error instanceof Error ? error.message : "Unable to sign in with Google.",
+      );
+      resetCaptcha();
       setOauthLoading(false);
     }
   };
@@ -187,41 +199,68 @@ function Login() {
     };
   }, [navigate, location.state]);
 
-  const handleLogin = async (e?: React.FormEvent<HTMLFormElement>) => {
-    e?.preventDefault();
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     if (loading) return;
     if (!captchaToken) {
-      setCaptchaIntent("password");
-      setCaptchaRequested(true);
       return;
     }
     setLoading(true);
 
     try {
-      const {
-        data: { user },
-        error: loginError,
-      } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-        options: { captchaToken },
+      const { data, error: loginError } = await supabase.functions.invoke<{
+        access_token?: string;
+        refresh_token?: string;
+      }>("captcha-auth", {
+        body: {
+          mode: "password",
+          email: email.trim(),
+          password,
+          captchaToken,
+        },
       });
 
       if (loginError) {
+        let errorMessage = loginError.message;
+        if (loginError.context instanceof Response) {
+          try {
+            const responseBody: unknown =
+              await loginError.context.clone().json();
+            if (
+              responseBody &&
+              typeof responseBody === "object" &&
+              "error" in responseBody &&
+              typeof responseBody.error === "string"
+            ) {
+              errorMessage = responseBody.error;
+            }
+          } catch (responseError) {
+            console.error("Could not read the CAPTCHA sign-in response:", responseError);
+          }
+        }
         alert(
-          loginError.message === "Invalid login credentials"
+          errorMessage === "Invalid login credentials"
             ? "Invalid email or password. Check that the account exists in this Supabase project and that the password is correct."
-            : loginError.message
+            : errorMessage,
         );
         return;
       }
 
-      if (!user) {
-        alert("Login failed. Supabase did not return a user.");
-        return;
+      if (!data?.access_token || !data.refresh_token) {
+        throw new Error("Sign in failed. Supabase did not return a session.");
       }
 
-      await routeAuthenticatedUser(user);
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        });
+      if (sessionError) throw sessionError;
+      if (!sessionData.user) {
+        throw new Error("Sign in failed. Supabase did not return a user.");
+      }
+
+      await routeAuthenticatedUser(sessionData.user);
     } catch (error) {
       console.error("Login error:", error);
       const message = error instanceof Error
@@ -231,21 +270,9 @@ function Login() {
       alert(message);
       navigate("/", { replace: true });
     } finally {
-      setCaptchaToken("");
-      setCaptchaResetKey((current) => current + 1);
-      setCaptchaRequested(false);
+      resetCaptcha();
       setLoading(false);
     }
-  };
-
-  const continueAfterCaptcha = () => {
-    if (!captchaToken || loading || oauthLoading) return;
-    if (captchaIntent === "google") {
-      void signInWithGoogle();
-      return;
-    }
-
-    void handleLogin();
   };
 
   return (
@@ -264,52 +291,13 @@ function Login() {
 
             <div className="mb-8">
               <h2 className="mt-2 text-3xl font-semibold tracking-tight text-[#102A4C] sm:text-4xl">
-                {captchaRequested ? "Verify your sign in" : "Sign in"}
+                Sign in
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-500 sm:text-base">
-                {captchaRequested
-                  ? "Complete the CAPTCHA to continue."
-                  : "Access your PESO MABINI account to continue."}
+                Access your PESO MABINI account to continue.
               </p>
             </div>
 
-            {captchaRequested ? (
-              <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <Captcha
-                  onVerify={setCaptchaToken}
-                  resetKey={captchaResetKey}
-                  className="flex flex-col items-center"
-                />
-                <button
-                  type="button"
-                  onClick={continueAfterCaptcha}
-                  disabled={!captchaToken || loading || oauthLoading}
-                  className="w-full rounded-2xl bg-[#315FEA] px-5 py-4 text-base font-semibold text-white shadow-[0_12px_24px_-12px_rgba(49,95,234,0.75)] transition hover:bg-[#244FD4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {loading
-                    ? "Signing In..."
-                    : oauthLoading
-                      ? "Opening Google..."
-                      : captchaIntent === "google"
-                        ? "Continue with Google"
-                        : "Continue to Sign In"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCaptchaRequested(false);
-                    setCaptchaToken("");
-                    setCaptchaResetKey((current) => current + 1);
-                    setOauthError("");
-                  }}
-                  disabled={loading || oauthLoading}
-                  className="w-full text-sm font-semibold text-slate-600 transition hover:text-[#315FEA] disabled:opacity-60"
-                >
-                  Back to sign in
-                </button>
-              </div>
-            ) : (
-              <>
             {sessionExpired && (
               <p
                 role="status"
@@ -392,9 +380,17 @@ function Login() {
                 </label>
               </div>
 
+              <Captcha
+                onVerify={setCaptchaToken}
+                onExpire={() => setCaptchaToken("")}
+                onError={() => setCaptchaToken("")}
+                resetKey={captchaResetKey}
+                className="flex justify-center"
+              />
+
               <button
                 type="submit"
-                disabled={loading || oauthLoading}
+                disabled={loading || oauthLoading || !captchaToken}
                 className="w-full rounded-2xl bg-[#315FEA] px-5 py-4 text-base font-semibold text-white shadow-[0_12px_24px_-12px_rgba(49,95,234,0.75)] transition hover:bg-[#244FD4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? "Signing In..." : "Sign In"}
@@ -408,10 +404,11 @@ function Login() {
                 Or
                 <span className="h-px flex-1 bg-slate-200" />
               </div>
+
               <button
                 type="button"
                 onClick={() => void signInWithGoogle()}
-                disabled={loading || oauthLoading}
+                disabled={loading || oauthLoading || !captchaToken}
                 className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 text-base font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
               >
                 <img src={googleLogo} alt="" aria-hidden="true" className="h-9 w-9 object-contain" />
@@ -443,8 +440,6 @@ function Login() {
               <AppIcon name="arrowLeft" className="h-4 w-4" />
               Return to Home
             </Link>
-              </>
-            )}
           </div>
         </section>
       </main>

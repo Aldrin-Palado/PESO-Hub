@@ -10,6 +10,35 @@
    npm run dev
    ```
 
+## Login CAPTCHA
+
+The login form uses the Google reCAPTCHA v2 Checkbox. Set the public site key in
+the frontend environment before building:
+
+```env
+VITE_RECAPTCHA_SITE_KEY=<Google reCAPTCHA v2 site key>
+```
+
+Configure these secrets in the Supabase project. `RECAPTCHA_ALLOWED_HOSTNAMES` is
+a comma-separated list of exact hostnames registered for the reCAPTCHA site key;
+include the local development hostname if testing locally.
+
+- `RECAPTCHA_SECRET_KEY` (keep this server-side; never use a `VITE_` variable)
+- `RECAPTCHA_ALLOWED_HOSTNAMES` (for example, `peso.example.gov,localhost`)
+
+Deploy the backend verifier after setting the secrets:
+
+```sh
+supabase secrets set RECAPTCHA_SECRET_KEY=<secret> RECAPTCHA_ALLOWED_HOSTNAMES=<hostnames>
+supabase functions deploy captcha-auth
+```
+
+The function verifies tokens with Google before requesting a Supabase password
+session. Google reCAPTCHA v2 is not a native Supabase Auth CAPTCHA provider, so
+direct calls to Supabase's public password-grant endpoint do not pass through this
+function. Use Supabase's native hCaptcha or Turnstile integration if CAPTCHA must
+also be enforced for direct Auth API calls.
+
 ## Admin/staff audit logs
 
 Admin and staff changes to job posts, applications, employers, job seekers, staff

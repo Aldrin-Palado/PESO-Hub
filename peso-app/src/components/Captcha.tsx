@@ -1,32 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 
-type TurnstileTheme = "light" | "dark" | "auto";
-type TurnstileSize = "normal" | "compact";
-
-type TurnstileRenderOptions = {
+type RecaptchaRenderOptions = {
   sitekey: string;
-  theme: TurnstileTheme;
-  size: TurnstileSize;
-  appearance: "always";
-  execution: "execute";
+  theme: "light" | "dark";
+  size: "normal" | "compact";
   callback: (token: string) => void;
   "expired-callback": () => void;
   "error-callback": () => void;
-  "timeout-callback": () => void;
 };
 
-type TurnstileApi = {
-  render: (
-    container: HTMLElement,
-    options: TurnstileRenderOptions,
-  ) => string;
-  execute: (widgetId: string) => void;
-  remove: (widgetId: string) => void;
+type RecaptchaApi = {
+  render: (container: HTMLElement, options: RecaptchaRenderOptions) => number;
+  reset: (widgetId?: number) => void;
 };
 
 declare global {
   interface Window {
-    turnstile?: TurnstileApi;
+    grecaptcha?: RecaptchaApi;
   }
 }
 
@@ -35,30 +25,30 @@ type CaptchaProps = {
   onExpire?: () => void;
   onError?: () => void;
   siteKey?: string;
-  theme?: TurnstileTheme;
-  size?: TurnstileSize;
+  theme?: "light" | "dark";
+  size?: "normal" | "compact";
   resetKey?: number;
   className?: string;
 };
 
-const TURNSTILE_SCRIPT_URL =
-  "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+const RECAPTCHA_SCRIPT_URL =
+  "https://www.google.com/recaptcha/api.js?render=explicit";
 
-let scriptPromise: Promise<TurnstileApi> | undefined;
+let scriptPromise: Promise<RecaptchaApi> | undefined;
 
-function loadTurnstile(): Promise<TurnstileApi> {
-  if (window.turnstile) return Promise.resolve(window.turnstile);
+function loadRecaptcha(): Promise<RecaptchaApi> {
+  if (window.grecaptcha) return Promise.resolve(window.grecaptcha);
   if (scriptPromise) return scriptPromise;
 
-  scriptPromise = new Promise<TurnstileApi>((resolve, reject) => {
+  scriptPromise = new Promise<RecaptchaApi>((resolve, reject) => {
     let script = document.querySelector<HTMLScriptElement>(
-      `script[src^="${TURNSTILE_SCRIPT_URL}"]`,
+      `script[src^="${RECAPTCHA_SCRIPT_URL}"]`,
     );
     const isNewScript = !script;
 
     if (!script) {
       script = document.createElement("script");
-      script.src = TURNSTILE_SCRIPT_URL;
+      script.src = RECAPTCHA_SCRIPT_URL;
       script.async = true;
       script.defer = true;
     }
@@ -70,17 +60,17 @@ function loadTurnstile(): Promise<TurnstileApi> {
     };
     const handleLoad = () => {
       cleanupListeners();
-      if (window.turnstile) {
-        resolve(window.turnstile);
+      if (window.grecaptcha) {
+        resolve(window.grecaptcha);
       } else {
         scriptPromise = undefined;
-        reject(new Error("Cloudflare Turnstile loaded without its API."));
+        reject(new Error("Google reCAPTCHA loaded without its API."));
       }
     };
     const handleError = () => {
       cleanupListeners();
       scriptPromise = undefined;
-      reject(new Error("Unable to load Cloudflare Turnstile."));
+      reject(new Error("Unable to load Google reCAPTCHA."));
     };
 
     currentScript.addEventListener("load", handleLoad, { once: true });
@@ -96,13 +86,15 @@ export default function Captcha({
   onVerify,
   onExpire,
   onError,
-  siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY,
+  siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY,
   theme = "light",
   size = "normal",
   resetKey = 0,
   className = "",
 }: CaptchaProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const widgetIdRef = useRef<number | null>(null);
+  const previousResetKeyRef = useRef(resetKey);
   const callbacksRef = useRef({ onVerify, onExpire, onError });
   const [loadError, setLoadError] = useState("");
 
@@ -113,7 +105,7 @@ export default function Captcha({
   useEffect(() => {
     if (!siteKey) {
       setLoadError(
-        "CAPTCHA is not configured. Set VITE_TURNSTILE_SITE_KEY to enable it.",
+        "CAPTCHA is not configured. Set VITE_RECAPTCHA_SITE_KEY to enable it.",
       );
       callbacksRef.current.onVerify("");
       callbacksRef.current.onError?.();
@@ -121,40 +113,37 @@ export default function Captcha({
     }
 
     let active = true;
-    let renderedWidgetId: string | undefined;
     setLoadError("");
     callbacksRef.current.onVerify("");
 
-    void loadTurnstile()
-      .then((turnstile) => {
+    void loadRecaptcha()
+      .then((recaptcha) => {
         if (!active || !containerRef.current) return;
 
-        renderedWidgetId = turnstile.render(containerRef.current, {
+        widgetIdRef.current = recaptcha.render(containerRef.current, {
           sitekey: siteKey,
           theme,
           size,
-          appearance: "always",
-          execution: "execute",
-          callback: (token) => {
-            callbacksRef.current.onVerify(token);
-          },
+          callback: (token) => callbacksRef.current.onVerify(token),
           "expired-callback": () => {
             callbacksRef.current.onVerify("");
             callbacksRef.current.onExpire?.();
+            if (widgetIdRef.current !== null) {
+              recaptcha.reset(widgetIdRef.current);
+            }
           },
           "error-callback": () => {
             callbacksRef.current.onVerify("");
             callbacksRef.current.onError?.();
-          },
-          "timeout-callback": () => {
-            callbacksRef.current.onVerify("");
+            if (widgetIdRef.current !== null) {
+              recaptcha.reset(widgetIdRef.current);
+            }
           },
         });
-        turnstile.execute(renderedWidgetId);
       })
       .catch((error: unknown) => {
         if (!active) return;
-        console.error("Cloudflare Turnstile error:", error);
+        console.error("Google reCAPTCHA error:", error);
         setLoadError(
           error instanceof Error
             ? error.message
@@ -166,11 +155,18 @@ export default function Captcha({
 
     return () => {
       active = false;
-      if (renderedWidgetId && window.turnstile) {
-        window.turnstile.remove(renderedWidgetId);
-      }
+      widgetIdRef.current = null;
     };
-  }, [siteKey, theme, size, resetKey]);
+  }, [siteKey, theme, size]);
+
+  useEffect(() => {
+    if (previousResetKeyRef.current === resetKey) return;
+    previousResetKeyRef.current = resetKey;
+    callbacksRef.current.onVerify("");
+    if (widgetIdRef.current !== null && window.grecaptcha) {
+      window.grecaptcha.reset(widgetIdRef.current);
+    }
+  }, [resetKey]);
 
   return (
     <div className={className}>
