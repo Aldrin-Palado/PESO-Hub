@@ -10,8 +10,11 @@ import {
   Tooltip,
   Cell,
   LabelList,
+  PieChart,
+  Pie,
 } from "recharts";
 import ExportFormatControl from "../components/ExportFormatControl";
+import { isJobSeekerProfileComplete } from "../services/jobSeekerProfile";
 
 type JobPost = {
   id?: string;
@@ -34,8 +37,11 @@ type JobSeeker = {
   id?: string;
   job_seeker_id?: string;
   full_name?: string;
+  email?: string | null;
   contact_no?: string | null;
   birth_date?: string | null;
+  resume_url?: string | null;
+  verification_status?: string | null;
   registration_details?: unknown;
   [key: string]: any;
 };
@@ -75,6 +81,17 @@ type InsightCategory =
   | "status"
   | "job post status";
 
+type ActionableInsight = {
+  title: string;
+  finding: string;
+  recommendation: string;
+};
+
+type ApplicationDateRange = {
+  start: string;
+  end: string;
+};
+
 type SelectedInsight = {
   category: InsightCategory;
   label: string;
@@ -89,6 +106,7 @@ type Props = {
   jobSeekers: JobSeeker[];
   loading: boolean;
   loadError: string;
+  realtimeUnavailable?: boolean;
 
   StatCard: React.ComponentType<{
     title: string;
@@ -151,6 +169,28 @@ function getRegistrationDetails(value: unknown): Record<string, any> {
   return {};
 }
 
+function hasCompleteJobSeekerProfile(seeker: JobSeeker): boolean {
+  return Boolean(
+    seeker.full_name?.trim() &&
+      seeker.email?.trim() &&
+      isJobSeekerProfileComplete(
+        seeker.registration_details,
+        seeker.resume_url,
+      ),
+  );
+}
+
+function getApplicationStatus(application: Application): string {
+  const status = String(
+    application.status || application.application_status || "",
+  )
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+
+  return status === "interview" ? "interviewed" : status;
+}
+
 function splitApplicantName(fullName: string) {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
 
@@ -192,6 +232,50 @@ function formatReportDate(value?: string | null): string {
   });
 }
 
+function createApplicationMonthBuckets(
+  range: ApplicationDateRange | null,
+) {
+  const now = new Date();
+  const startParts = range?.start.split("-").map(Number);
+  const endParts = range?.end.split("-").map(Number);
+  const startDate = startParts
+    ? new Date(startParts[0], startParts[1] - 1, 1)
+    : new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  const endDate = endParts
+    ? new Date(endParts[0], endParts[1] - 1, 1)
+    : new Date(now.getFullYear(), now.getMonth(), 1);
+  const buckets: { key: string; label: string; value: number }[] = [];
+
+  for (
+    let date = startDate;
+    date <= endDate;
+    date = new Date(date.getFullYear(), date.getMonth() + 1, 1)
+  ) {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    buckets.push({
+      key: `${year}-${String(month + 1).padStart(2, "0")}`,
+      label: date.toLocaleDateString("en-US", {
+        month: "short",
+        year: "2-digit",
+      }),
+      value: 0,
+    });
+  }
+
+  return buckets;
+}
+
+function isFullMonthDateRange(range: ApplicationDateRange): boolean {
+  const startDay = Number(range.start.slice(8, 10));
+  const endYear = Number(range.end.slice(0, 4));
+  const endMonth = Number(range.end.slice(5, 7));
+  const endDay = Number(range.end.slice(8, 10));
+  const lastDayOfEndMonth = new Date(endYear, endMonth, 0).getDate();
+
+  return startDay === 1 && endDay === lastDayOfEndMonth;
+}
+
 export default function AnalyticsModule({
   counts,
   applications,
@@ -200,84 +284,274 @@ export default function AnalyticsModule({
   jobSeekers,
   loading,
   loadError,
+  realtimeUnavailable = false,
   StatCard,
   AnalyticsCard,
   SummaryRow,
 }: Props) {
   const [selectedInsight, setSelectedInsight] =
     useState<SelectedInsight>(null);
-  const [placementStartDate, setPlacementStartDate] = useState("");
-  const [placementEndDate, setPlacementEndDate] = useState("");
-  const [generatedPlacementRange, setGeneratedPlacementRange] = useState<{
-    start: string;
-    end: string;
-  } | null>(null);
+  const [applicationStartDate, setApplicationStartDate] = useState("");
+  const [applicationEndDate, setApplicationEndDate] = useState("");
+  const [applicationDateRange, setApplicationDateRange] =
+    useState<ApplicationDateRange | null>(null);
+  const applicationsInRange = useMemo(() => {
+    if (!applicationDateRange) return applications;
+
+    return applications.filter((application) => {
+      const appliedDate = application.date_applied?.slice(0, 10) || "";
+      return (
+        appliedDate >= applicationDateRange.start &&
+        appliedDate <= applicationDateRange.end
+      );
+    });
+  }, [applications, applicationDateRange]);
+
+  const genderBreakdown = useMemo(() => {
+    let male = 0;
+    let female = 0;
+
+    jobSeekers.forEach((seeker) => {
+      if (!hasCompleteJobSeekerProfile(seeker)) return;
+
+      const sex = String(
+        getRegistrationDetails(seeker.registration_details).sex || "",
+      )
+        .trim()
+        .toLowerCase();
+
+      if (sex === "male") male++;
+      if (sex === "female") female++;
+    });
+
+    return [
+      { label: "Male", value: male, color: BLUE },
+      { label: "Female", value: female, color: RED },
+    ];
+  }, [jobSeekers]);
+  const fourPsBreakdown = useMemo(() => {
+    let yes = 0;
+    let no = 0;
+
+    jobSeekers.forEach((seeker) => {
+      if (!hasCompleteJobSeekerProfile(seeker)) return;
+
+      const answer = getRegistrationDetails(
+        seeker.registration_details,
+      ).is4PsBeneficiary;
+      const normalizedAnswer =
+        typeof answer === "boolean"
+          ? answer
+            ? "yes"
+            : "no"
+          : String(answer || "")
+              .trim()
+              .toLowerCase();
+
+      if (normalizedAnswer === "yes") yes++;
+      if (normalizedAnswer === "no") no++;
+    });
+
+    return [
+      { label: "Yes", value: yes, color: BLUE },
+      { label: "No", value: no, color: "#94A3B8" },
+    ];
+  }, [jobSeekers]);
+  const fourPsRespondentCount = fourPsBreakdown.reduce(
+    (total, item) => total + item.value,
+    0,
+  );
+  const disabilityBreakdown = useMemo(() => {
+    const categories = [
+      "Visual",
+      "Hearing",
+      "Speech",
+      "Physical",
+      "Mental",
+      "Other",
+      "N/A",
+    ];
+    const counts = new Map<string, { label: string; value: number }>();
+    categories.forEach((label) => {
+      counts.set(label.toLowerCase(), { label, value: 0 });
+    });
+
+    jobSeekers.forEach((seeker) => {
+      if (!hasCompleteJobSeekerProfile(seeker)) return;
+
+      const disability = String(
+        getRegistrationDetails(seeker.registration_details).disability || "",
+      )
+        .trim()
+        .toLowerCase();
+      const category = counts.get(disability) ?? counts.get("other");
+      if (category) category.value++;
+    });
+
+    return Array.from(counts.values());
+  }, [jobSeekers]);
+  const graduateTracking = useMemo(() => {
+    const reasonLabels = [
+      "New entrant/Fresh graduate",
+      "Finished contract",
+      "Resigned",
+      "Retired",
+      "Terminated/Laid off due to calamity",
+      "Terminated/Laid off (local)",
+      "Terminated/Laid off (abroad)",
+      "Other",
+      "Not specified",
+    ];
+    const reasonCounts = new Map<string, { label: string; value: number }>();
+    reasonLabels.forEach((label) => {
+      reasonCounts.set(label.toLowerCase(), { label, value: 0 });
+    });
+
+    const freshGraduateIds = new Set<string>();
+    jobSeekers.forEach((seeker) => {
+      if (seeker.verification_status?.trim().toLowerCase() !== "verified") {
+        return;
+      }
+
+      const seekerId = seeker.job_seeker_id || seeker.id;
+      const reason = String(
+        getRegistrationDetails(seeker.registration_details).unemploymentReason ||
+          "",
+      )
+        .trim()
+        .toLowerCase();
+      const category =
+        reasonCounts.get(reason) ??
+        reasonCounts.get(reason ? "other" : "not specified");
+      if (category) category.value++;
+
+      if (seekerId && reason === "new entrant/fresh graduate") {
+        freshGraduateIds.add(seekerId);
+      }
+    });
+
+    const latestApplications = new Map<
+      string,
+      { dateApplied: string; applicationId: string; status: string }
+    >();
+    applicationsInRange.forEach((application) => {
+      const seekerId = application.job_seeker_id;
+      if (!seekerId || !freshGraduateIds.has(seekerId)) return;
+
+      const dateApplied = String(application.date_applied || "");
+      const applicationId = String(
+        application.application_id || application.id || "",
+      );
+      const current = latestApplications.get(seekerId);
+      if (
+        !current ||
+        dateApplied.localeCompare(current.dateApplied) > 0 ||
+        (dateApplied === current.dateApplied &&
+          applicationId.localeCompare(current.applicationId) > 0)
+      ) {
+        latestApplications.set(seekerId, {
+          dateApplied,
+          applicationId,
+          status: getApplicationStatus(application),
+        });
+      }
+    });
+
+    const outcomeCounts = {
+      hired: 0,
+      rejected: 0,
+      otherStatus: 0,
+      noApplication: 0,
+    };
+    freshGraduateIds.forEach((seekerId) => {
+      const latest = latestApplications.get(seekerId);
+      if (!latest) {
+        outcomeCounts.noApplication++;
+      } else if (latest.status === "hired") {
+        outcomeCounts.hired++;
+      } else if (latest.status === "rejected") {
+        outcomeCounts.rejected++;
+      } else {
+        outcomeCounts.otherStatus++;
+      }
+    });
+
+    const freshGraduateCount = freshGraduateIds.size;
+    const percentage = (count: number) =>
+      freshGraduateCount ? (count / freshGraduateCount) * 100 : 0;
+
+    return {
+      reasonBreakdown: Array.from(reasonCounts.values()),
+      freshGraduateCount,
+      freshGraduateOutcomeSummary: [
+        {
+          key: "hired",
+          label: "Hired",
+          value: outcomeCounts.hired,
+          percentage: percentage(outcomeCounts.hired),
+          color: "#059669",
+        },
+        {
+          key: "rejected",
+          label: "Rejected",
+          value: outcomeCounts.rejected,
+          percentage: percentage(outcomeCounts.rejected),
+          color: RED,
+        },
+        {
+          key: "otherStatus",
+          label: "Other statuses",
+          value: outcomeCounts.otherStatus,
+          percentage: percentage(outcomeCounts.otherStatus),
+          color: "#F59E0B",
+        },
+        {
+          key: "noApplication",
+          label: "No application",
+          value: outcomeCounts.noApplication,
+          percentage: percentage(outcomeCounts.noApplication),
+          color: "#94A3B8",
+        },
+      ],
+    };
+  }, [applicationsInRange, jobSeekers]);
 
   // APPLICATION STATUS COUNTS
 
-  const pendingApplications = applications.filter(
+  const pendingApplications = applicationsInRange.filter(
     (application) => {
-      const status =
-        application.status ||
-        application.application_status ||
-        "";
-
-      return status.toLowerCase() === "pending";
+      return getApplicationStatus(application) === "pending";
     }
   ).length;
 
-  const underReviewApplications = applications.filter(
+  const underReviewApplications = applicationsInRange.filter(
   (application) => {
-    const status =
-      application.status ||
-      application.application_status ||
-      "";
-
-    return status.toLowerCase() === "under_review";
+    return getApplicationStatus(application) === "under_review";
   }
 ).length;
 
-  const rejectedApplications = applications.filter(
+  const rejectedApplications = applicationsInRange.filter(
     (application) => {
-      const status =
-        application.status ||
-        application.application_status ||
-        "";
-
-      return status.toLowerCase() === "rejected";
+      return getApplicationStatus(application) === "rejected";
     }
   ).length;
 
-  const hiredApplications = applications.filter(
+  const hiredApplications = applicationsInRange.filter(
     (application) => {
-      const status =
-        application.status ||
-        application.application_status ||
-        "";
-
-      return status.toLowerCase() === "hired";
+      return getApplicationStatus(application) === "hired";
     }
   ).length;
 
   const placementApplications = useMemo(
     () =>
-      applications
-        .filter((application) => {
-          const appliedDate = application.date_applied?.slice(0, 10) || "";
-          return (
-            generatedPlacementRange !== null &&
-            Boolean(generatedPlacementRange.start) &&
-            Boolean(generatedPlacementRange.end) &&
-            appliedDate >= generatedPlacementRange.start &&
-            appliedDate <= generatedPlacementRange.end
-          );
-        })
-        .sort((first, second) =>
-          String(second.date_applied || "").localeCompare(
-            String(first.date_applied || ""),
-          ),
-        ),
-    [applications, generatedPlacementRange],
+      applicationDateRange
+        ? [...applicationsInRange].sort((first, second) =>
+            String(second.date_applied || "").localeCompare(
+              String(first.date_applied || ""),
+            ),
+          )
+        : [],
+    [applicationsInRange, applicationDateRange],
   );
   const placementExportRows = useMemo(
     () =>
@@ -347,54 +621,21 @@ hiredEvent
       }),
     [placementApplications],
   );
-  const placementReportIsCurrent =
-    generatedPlacementRange !== null &&
-    generatedPlacementRange.start === placementStartDate &&
-    generatedPlacementRange.end === placementEndDate;
-
   // ANALYTICS DATA
 
   const analyticsData = useMemo(() => {
     const statuses = [
-  { key: "pending", label: "Pending", values: ["pending"] },
-  { key: "under_review", label: "Under Review", values: ["under_review"] },
-  { key: "shortlisted", label: "Shortlisted", values: ["shortlisted"] },
-  { key: "qualified", label: "Qualified", values: ["qualified"] },
-  {
-    key: "interviewed",
-    label: "Interviewed",
-    values: ["interview", "interviewed"],
-  },
-  { key: "withdrawn", label: "Withdrawn", values: ["withdrawn"] },
-  { key: "cancelled", label: "Cancelled", values: ["cancelled"] },
-  { key: "hired", label: "You're Hired", values: ["hired"] },
-  { key: "rejected", label: "Rejected", values: ["rejected"] },
-];
+      { key: "pending", label: "Pending" },
+      { key: "under_review", label: "Under Review" },
+      { key: "shortlisted", label: "Shortlisted" },
+      { key: "qualified", label: "Qualified" },
+      { key: "interviewed", label: "Interviewed" },
+      { key: "withdrawn", label: "Withdrawn" },
+      { key: "hired", label: "You're Hired" },
+      { key: "rejected", label: "Rejected" },
+    ];
 
-    // LAST SIX MONTHS
-
-    const monthBuckets = Array.from(
-      { length: 6 },
-      (_, index) => {
-        const date = new Date();
-
-        date.setDate(1);
-        date.setMonth(date.getMonth() - (5 - index));
-
-        return {
-          key: `${date.getFullYear()}-${String(
-            date.getMonth() + 1
-          ).padStart(2, "0")}`,
-
-          label: date.toLocaleDateString("en-US", {
-            month: "short",
-            year: "2-digit",
-          }),
-
-          value: 0,
-        };
-      }
-    );
+    const monthBuckets = createApplicationMonthBuckets(applicationDateRange);
 
     const monthlyMap = new Map(
       monthBuckets.map((month) => [month.key, month] as const)
@@ -403,8 +644,14 @@ hiredEvent
     const titleCounts = new Map<string, number>();
     const companyCounts = new Map<string, number>();
 
-    const statusCounts = new Map<string, number>(
-      statuses.map((status) => [status.key, 0] as const)
+    const statusCounts = new Map<
+      string,
+      { label: string; value: number }
+    >(
+      statuses.map((status) => [
+        status.key,
+        { label: status.label, value: 0 },
+      ]),
     );
 
     // JOB POST STATUS COUNTS
@@ -458,21 +705,12 @@ jobPosts.forEach((job) => {
 
     // PROCESS APPLICATIONS
 
-    applications.forEach((application) => {
-      const date = application.date_applied
-        ? new Date(application.date_applied)
-        : null;
-
-      if (date && !Number.isNaN(date.getTime())) {
-        const key = `${date.getFullYear()}-${String(
-          date.getMonth() + 1
-        ).padStart(2, "0")}`;
-
-        const month = monthlyMap.get(key);
-
-        if (month) {
-          month.value++;
-        }
+    applicationsInRange.forEach((application) => {
+      const month = monthlyMap.get(
+        String(application.date_applied || "").slice(0, 7),
+      );
+      if (month) {
+        month.value++;
       }
 
       const title = String(
@@ -495,42 +733,35 @@ jobPosts.forEach((job) => {
         (companyCounts.get(company) || 0) + 1
       );
 
-      const status = String(
-  application.status ||
-  application.application_status ||
-  ""
-)
-  .trim()
-  .toLowerCase();
-
-const normalizedStatus =
-  status === "interview" ? "interviewed" : status;
-
-if (statusCounts.has(normalizedStatus)) {
-  statusCounts.set(
-    normalizedStatus,
-    (statusCounts.get(normalizedStatus) || 0) + 1
-  );
-}
+      const normalizedStatus = getApplicationStatus(application) || "unknown";
+      const currentStatus = statusCounts.get(normalizedStatus);
+      if (currentStatus) {
+        currentStatus.value++;
+      } else {
+        const label = normalizedStatus
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (char) => char.toUpperCase());
+        statusCounts.set(normalizedStatus, { label, value: 1 });
+      }
     });
+
+    const allJobTitles = Array.from(titleCounts.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value);
+    const allCompanies = Array.from(companyCounts.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value);
 
     return {
       monthlyApplications: monthBuckets,
 
-      topJobTitles: Array.from(titleCounts.entries())
-        .map(([label, value]) => ({ label, value }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 5),
+      allJobTitles,
+      topJobTitles: allJobTitles.slice(0, 5),
 
-      topCompanies: Array.from(companyCounts.entries())
-        .map(([label, value]) => ({ label, value }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 5),
+      allCompanies,
+      topCompanies: allCompanies.slice(0, 5),
 
-      statusBreakdown: statuses.map((status) => ({
-        label: status.label,
-        value: statusCounts.get(status.key) || 0,
-      })),
+      statusBreakdown: Array.from(statusCounts.values()),
 
       jobPostStatusBreakdown: Array.from(
   jobPostStatusCounts.values()
@@ -545,7 +776,7 @@ if (statusCounts.has(normalizedStatus)) {
           String(job.status || "").toLowerCase() === "open"
       ).length,
     };
-  }, [applications, employers, jobPosts]);
+  }, [applicationDateRange, applicationsInRange, employers, jobPosts]);
 
   // CHART SELECTION
 
@@ -577,23 +808,38 @@ if (statusCounts.has(normalizedStatus)) {
     selectedMonthIndex >= 0
       ? analyticsData.monthlyApplications[selectedMonthIndex]
       : null;
-
+  const selectedMonthIsCurrent =
+    !applicationDateRange &&
+    selectedMonthIndex === analyticsData.monthlyApplications.length - 1;
   const previousMonth =
     selectedMonthIndex > 0
       ? analyticsData.monthlyApplications[
           selectedMonthIndex - 1
         ]
       : null;
+  const canCompareSelectedMonth =
+    Boolean(previousMonth) &&
+    (applicationDateRange
+      ? isFullMonthDateRange(applicationDateRange)
+      : !selectedMonthIsCurrent);
 
   const monthlyTrendInsight = (() => {
     if (!selectedMonth) return "";
 
-    if (!previousMonth) {
+    if (!canCompareSelectedMonth || !previousMonth) {
       return `${selectedMonth.value} ${
         selectedMonth.value === 1
           ? "application was"
           : "applications were"
-      } recorded in ${selectedMonth.label}. No previous month is available for comparison.`;
+      } recorded in ${selectedMonth.label}${
+        selectedMonthIsCurrent ? " month-to-date" : ""
+      }. ${
+        applicationDateRange && !isFullMonthDateRange(applicationDateRange)
+          ? "Month-to-month comparison is omitted because the selected range contains partial months."
+          : previousMonth
+            ? "Month-to-month comparison is omitted for this partial period."
+            : "No previous month is available in this view for comparison."
+      }`;
     }
 
     const difference =
@@ -612,51 +858,235 @@ if (statusCounts.has(normalizedStatus)) {
     return `Application volume remained unchanged compared with ${previousMonth.label}, with ${selectedMonth.value} applications in both months.`;
   })();
 
-  // SHARED INSIGHT DESCRIPTION
+  const totalApplications = applicationsInRange.length;
+  const applicationPeriodPhrase = applicationDateRange
+    ? "in the selected date range"
+    : "in the full dataset";
+  const totalJobPosts = jobPosts.length;
+  const applicationPeriodTotal = analyticsData.monthlyApplications.reduce(
+    (total, month) => total + month.value,
+    0,
+  );
+  const latestMonth =
+    analyticsData.monthlyApplications[
+      analyticsData.monthlyApplications.length - 1
+    ];
+  const latestMonthPrevious =
+    applicationDateRange &&
+    isFullMonthDateRange(applicationDateRange) &&
+    analyticsData.monthlyApplications.length > 1
+      ? analyticsData.monthlyApplications[
+          analyticsData.monthlyApplications.length - 2
+        ]
+      : null;
+  const reviewQueueCount = pendingApplications + underReviewApplications;
+  const reviewQueuePercentage = totalApplications
+    ? Math.round((reviewQueueCount / totalApplications) * 100)
+    : 0;
+  const reasonProfileCount = graduateTracking.reasonBreakdown.reduce(
+    (total, item) => total + item.value,
+    0,
+  );
+  const leadingReason = graduateTracking.reasonBreakdown.reduce<
+    (typeof graduateTracking.reasonBreakdown)[number] | null
+  >(
+    (leading, item) =>
+      item.value > 0 && (!leading || item.value > leading.value)
+        ? item
+        : leading,
+    null,
+  );
+  const getOutcome = (key: string) =>
+    graduateTracking.freshGraduateOutcomeSummary.find(
+      (item) => item.key === key,
+    ) ?? { value: 0, percentage: 0, label: key };
+  const hiredOutcome = getOutcome("hired");
+  const rejectedOutcome = getOutcome("rejected");
+  const otherStatusOutcome = getOutcome("otherStatus");
+  const noApplicationOutcome = getOutcome("noApplication");
+  const applicationTrendDifference =
+    latestMonth && latestMonthPrevious
+      ? latestMonth.value - latestMonthPrevious.value
+      : 0;
 
-  const insightDescription = !selectedInsight
-    ? ""
-    : selectedInsight.category === "month"
-      ? monthlyTrendInsight
-      : selectedInsight.category === "job title"
-        ? `${selectedInsight.value} ${
-            selectedInsight.value === 1
-              ? "application was"
-              : "applications were"
-          } submitted for ${selectedInsight.label}.`
-        : selectedInsight.category === "company"
-          ? `${selectedInsight.value} ${
-              selectedInsight.value === 1
-                ? "application was"
-                : "applications were"
-            } submitted to ${selectedInsight.label}.`
-          : selectedInsight.category === "job post status"
-            ? `${selectedInsight.value} ${
-                selectedInsight.value === 1
-                  ? "job post is"
-                  : "job posts are"
-              } currently marked as ${selectedInsight.label}.`
-            : `${selectedInsight.value} ${
-                selectedInsight.value === 1
-                  ? "application currently has"
-                  : "applications currently have"
-              } the status ${selectedInsight.label}.`;
+  const overviewInsights: ActionableInsight[] = [
+    {
+      title: "Application activity",
+      finding:
+        totalApplications === 0
+          ? "No application records are available yet, so a monthly trend cannot be established."
+          : latestMonth && latestMonthPrevious
+            ? `${latestMonth.label} has ${latestMonth.value.toLocaleString()} applications, ${
+                applicationTrendDifference > 0
+                  ? `up ${applicationTrendDifference.toLocaleString()}`
+                  : applicationTrendDifference < 0
+                    ? `down ${Math.abs(applicationTrendDifference).toLocaleString()}`
+                    : "unchanged"
+              } from ${latestMonthPrevious.label} (${latestMonthPrevious.value.toLocaleString()}).`
+            : latestMonth
+              ? applicationDateRange &&
+                !isFullMonthDateRange(applicationDateRange)
+                ? `${latestMonth.value.toLocaleString()} applications were received in ${latestMonth.label} within the selected range. Month-to-month comparison is omitted because the range includes partial months.`
+                : applicationDateRange
+                  ? `${latestMonth.value.toLocaleString()} applications were received in ${latestMonth.label}; select a range covering at least two full months for comparison.`
+                  : `${latestMonth.value.toLocaleString()} applications were received in ${latestMonth.label} month-to-date.`
+              : `${totalApplications.toLocaleString()} application records are available.`,
+      recommendation:
+        totalApplications === 0
+          ? "Confirm that at least one current vacancy is open and that job seekers can submit applications."
+          : applicationDateRange &&
+            !isFullMonthDateRange(applicationDateRange)
+            ? "For a meaningful month-to-month comparison, select a range beginning on the first day and ending on the last day of a month."
+            : applicationDateRange && !latestMonthPrevious
+              ? "Select a range covering at least two full months to compare application trends."
+              : !applicationDateRange
+                ? "Treat the current-month count as month-to-date; compare it with a completed month or use a full-month date range."
+            : applicationTrendDifference < 0
+            ? "Review open-vacancy count and posting visibility, then compare the next month's applications."
+            : applicationTrendDifference > 0
+              ? "Check that employers have enough capacity to review the increased application volume."
+              : "Keep vacancy information current and monitor whether application activity changes next month.",
+    },
+    {
+      title: "Application review queue",
+      finding:
+        totalApplications === 0
+          ? "The review queue will appear after applications are submitted."
+          : `${reviewQueueCount.toLocaleString()} of ${totalApplications.toLocaleString()} applications (${reviewQueuePercentage}%) are pending or under review.`,
+      recommendation:
+        totalApplications === 0
+          ? "Confirm that application submissions are working, then monitor the queue when new records arrive."
+          : reviewQueueCount > 0
+          ? "Sort pending and under-review applications by date received, then follow up on the oldest records with the responsible employers."
+          : "The pending and under-review queue is clear; continue checking new submissions on a regular schedule.",
+    },
+    {
+      title: "Verified job-seeker profile needs",
+      finding: leadingReason
+        ? `${leadingReason.label} is the most common recorded reason (${leadingReason.value.toLocaleString()} of ${reasonProfileCount.toLocaleString()} verified profiles).`
+        : "There are no verified job-seeker profiles with unemployment-reason data yet.",
+      recommendation: leadingReason
+        ? leadingReason.label === "Not specified"
+          ? "Improve completion of the unemployment-reason field during profile verification so support can be targeted using reliable data."
+          : leadingReason.label === "Other"
+            ? "Review the reasons grouped as Other and refine profile choices or data entry so future support can target the most common needs."
+            : `Prioritize job-search support for verified job seekers reporting "${leadingReason.label}", and review this group’s progress in the next reporting period.`
+        : "Continue verification and ensure the unemployment-reason field is captured for each verified profile.",
+    },
+    {
+      title: "Fresh-graduate outcomes",
+      finding:
+        graduateTracking.freshGraduateCount === 0
+          ? "No verified fresh-graduate profiles are available to calculate hiring or rejection rates."
+        : `Among ${graduateTracking.freshGraduateCount.toLocaleString()} verified fresh graduates, ${hiredOutcome.value.toLocaleString()} (${hiredOutcome.percentage.toFixed(1)}%) are hired and ${rejectedOutcome.value.toLocaleString()} (${rejectedOutcome.percentage.toFixed(1)}%) are rejected; ${otherStatusOutcome.value.toLocaleString()} have another status and ${noApplicationOutcome.value.toLocaleString()} have no application${applicationDateRange ? " in the selected date range" : ""}.`,
+      recommendation:
+        graduateTracking.freshGraduateCount === 0
+          ? "Ensure verified profiles have an accurate unemployment reason so eligible fresh graduates can be tracked."
+          : noApplicationOutcome.value > 0
+        ? applicationDateRange
+          ? `Review the ${noApplicationOutcome.value.toLocaleString()} fresh graduates without an application in this range; check for applications outside the selected period before treating them as never applied.`
+          : `Connect the ${noApplicationOutcome.value.toLocaleString()} fresh graduates without applications to relevant open vacancies, then track their outcomes.`
+          : otherStatusOutcome.value > 0
+            ? `Follow up on the ${otherStatusOutcome.value.toLocaleString()} fresh graduates whose latest application is still in another status, and update the status when employers respond.`
+            : rejectedOutcome.value > 0 && hiredOutcome.value === 0
+              ? "Review rejection feedback with employers and use recurring qualification gaps to guide graduate preparation."
+              : hiredOutcome.value > 0
+                ? "Record confirmed placements and review the qualifications and vacancy types associated with successful hires."
+                : "Monitor new applications and update their outcomes so hiring and rejection rates remain informative.",
+    },
+  ];
 
-  // RECOMMENDED ACTION
+  const activeSelectedInsight = (() => {
+    if (!selectedInsight) return null;
 
-  const recommendedAction = !selectedInsight
-    ? ""
-    : selectedInsight.category === "month"
-      ? selectedInsight.value === 0
-        ? "Review whether job vacancies were published and visible during this month."
-        : "Compare this month's application volume with other months to identify changes in applicant activity."
-      : selectedInsight.category === "job title"
-        ? "Review the qualifications and skills associated with this position when planning job matching activities."
-        : selectedInsight.category === "company"
-          ? "Review this employer's active vacancies and applicant volume to assess recruitment demand."
-          : selectedInsight.category === "job post status"
-            ? "Review the current job post status mix and adjust hiring or posting strategies if a status is overrepresented or stalled."
-            : "Review applications under this status and follow up on records requiring action.";
+    const sources = {
+      month: analyticsData.monthlyApplications,
+      "job title": analyticsData.allJobTitles,
+      company: analyticsData.allCompanies,
+      status: analyticsData.statusBreakdown,
+      "job post status": analyticsData.jobPostStatusBreakdown,
+    };
+    const currentValue =
+      sources[selectedInsight.category].find(
+        (item) => item.label === selectedInsight.label,
+      )?.value ?? 0;
+
+    return { ...selectedInsight, value: currentValue };
+  })();
+
+  const selectedInsightDetails: ActionableInsight | null =
+    !activeSelectedInsight
+      ? null
+      : activeSelectedInsight.category === "month"
+        ? {
+            title: activeSelectedInsight.label,
+            finding: `${monthlyTrendInsight} ${
+              applicationPeriodTotal
+                ? `${Math.round((activeSelectedInsight.value / applicationPeriodTotal) * 100)}% of applications in ${
+                    applicationDateRange ? "the selected date range" : "the six-month view"
+                  } were received during this month.`
+                : ""
+            }`,
+            recommendation:
+              activeSelectedInsight.value === 0
+                ? "Check whether suitable vacancies were open and visible during this month, then compare activity after the next posting cycle."
+                : applicationTrendDifference < 0 &&
+                    selectedMonthIndex ===
+                      analyticsData.monthlyApplications.length - 1
+                  ? "Review open-vacancy count and posting visibility to understand the recent decline."
+                  : "Use this month's volume to plan employer follow-up and compare demand with the adjacent months.",
+          }
+        : activeSelectedInsight.category === "job title"
+          ? {
+              title: activeSelectedInsight.label,
+              finding: `${activeSelectedInsight.value.toLocaleString()} ${
+                activeSelectedInsight.value === 1
+                  ? "application"
+                  : "applications"
+              } were received for this position (${totalApplications ? Math.round((activeSelectedInsight.value / totalApplications) * 100) : 0}% of applications ${applicationPeriodPhrase}).`,
+              recommendation:
+                "Check that the vacancy is still open, review the required qualifications, and coordinate interview capacity with its employer.",
+            }
+          : activeSelectedInsight.category === "company"
+            ? {
+                title: activeSelectedInsight.label,
+                finding: `${activeSelectedInsight.value.toLocaleString()} ${
+                  activeSelectedInsight.value === 1
+                    ? "application"
+                    : "applications"
+                } were submitted to this employer (${totalApplications ? Math.round((activeSelectedInsight.value / totalApplications) * 100) : 0}% of applications ${applicationPeriodPhrase}).`,
+                recommendation:
+                  "Review this employer’s active vacancies and agree on a timely applicant-review schedule based on the volume received.",
+              }
+            : activeSelectedInsight.category === "job post status"
+              ? {
+                  title: activeSelectedInsight.label,
+                  finding: `${activeSelectedInsight.value.toLocaleString()} of ${totalJobPosts.toLocaleString()} job posts (${totalJobPosts ? Math.round((activeSelectedInsight.value / totalJobPosts) * 100) : 0}%) are currently marked ${activeSelectedInsight.label}.`,
+                  recommendation:
+                    activeSelectedInsight.label.toLowerCase() === "open"
+                      ? "Confirm open posts still have valid vacancies, current employer contacts, and accurate application instructions."
+                      : "Verify that posts in this status are correctly classified; close filled roles or reopen positions that are still accepting applicants.",
+                }
+              : {
+                  title: activeSelectedInsight.label,
+                  finding: `${activeSelectedInsight.value.toLocaleString()} of ${totalApplications.toLocaleString()} applications ${applicationPeriodPhrase} (${totalApplications ? Math.round((activeSelectedInsight.value / totalApplications) * 100) : 0}%) currently have this status.`,
+                  recommendation:
+                    ["pending", "under review"].includes(
+                      activeSelectedInsight.label.toLowerCase(),
+                    )
+                      ? "Sort these applications by date received and follow up on the oldest records with the responsible employers."
+                      : ["hired", "you're hired"].includes(
+                            activeSelectedInsight.label.toLowerCase(),
+                          )
+                        ? "Confirm placement details and ensure the successful outcome is recorded in the applicant’s history."
+                        : activeSelectedInsight.label.toLowerCase() ===
+                            "rejected"
+                          ? "Review available employer feedback and look for recurring qualification gaps that can inform job-seeker support."
+                          : "Review applications in this stage and update each record when the employer makes a decision.",
+                };
+  const hasUnappliedApplicationDateRange =
+    applicationStartDate !== (applicationDateRange?.start ?? "") ||
+    applicationEndDate !== (applicationDateRange?.end ?? "");
 
   return (
     <div className="space-y-6">
@@ -678,6 +1108,94 @@ if (statusCounts.has(normalizedStatus)) {
           Unable to load analytics: {loadError}
         </div>
       )}
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div className="max-w-3xl">
+            <h2 className="text-lg font-bold text-slate-800">
+              Application Date Filter
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              The applied range filters application totals, trends, status and
+              demand charts, graduate outcomes, the placement report, and their
+              insights. Profile demographics and current job-post/employer
+              snapshots remain unfiltered.
+            </p>
+            <p className="mt-2 text-xs text-slate-500" aria-live="polite">
+              {hasUnappliedApplicationDateRange
+                ? "Date changes are not applied; analytics still use the last applied range."
+                : applicationDateRange
+                  ? `Applied: ${formatReportDate(applicationDateRange.start)} – ${formatReportDate(applicationDateRange.end)}`
+                  : "No date range applied; application analytics include all available records."}
+            </p>
+            {realtimeUnavailable && (
+              <p
+                role="status"
+                className="mt-2 text-xs text-amber-700"
+              >
+                Live database updates are reconnecting; analytics will refresh
+                automatically every 30 seconds until restored.
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="text-xs font-semibold text-slate-600">
+              Applied from
+              <input
+                type="date"
+                value={applicationStartDate}
+                max={applicationEndDate || undefined}
+                onChange={(event) => setApplicationStartDate(event.target.value)}
+                className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
+              />
+            </label>
+            <label className="text-xs font-semibold text-slate-600">
+              Applied to
+              <input
+                type="date"
+                value={applicationEndDate}
+                min={applicationStartDate || undefined}
+                onChange={(event) => setApplicationEndDate(event.target.value)}
+                className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={
+                !applicationStartDate ||
+                !applicationEndDate ||
+                applicationStartDate > applicationEndDate
+              }
+              onClick={() => {
+                setApplicationDateRange({
+                  start: applicationStartDate,
+                  end: applicationEndDate,
+                });
+                setSelectedInsight(null);
+              }}
+              className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Apply date range
+            </button>
+            {(applicationStartDate ||
+              applicationEndDate ||
+              applicationDateRange) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setApplicationStartDate("");
+                  setApplicationEndDate("");
+                  setApplicationDateRange(null);
+                  setSelectedInsight(null);
+                }}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
 
       {/* MAIN STATISTICS */}
 
@@ -706,8 +1224,12 @@ if (statusCounts.has(normalizedStatus)) {
 
         <ReportStatCard
           icon="applications"
-          title="Total Applications"
-          value={counts.applications}
+          title={
+            applicationDateRange
+              ? "Applications in Range"
+              : "Total Applications"
+          }
+          value={applicationsInRange.length}
           StatCard={StatCard}
         />
 
@@ -720,67 +1242,15 @@ if (statusCounts.has(normalizedStatus)) {
               Placement Status Report
             </h3>
             <p className="mt-1 text-sm text-slate-500">
-              Overall applications and whether each applicant reached the
+              Applicants in the applied date range and whether they reached
               Qualified, Interviewed, and Hired stages.
             </p>
           </div>
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="text-xs font-semibold text-slate-600">
-              Applied from
-              <input
-                type="date"
-                value={placementStartDate}
-                max={placementEndDate || undefined}
-                onChange={(event) => setPlacementStartDate(event.target.value)}
-                className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
-              />
-            </label>
-            <label className="text-xs font-semibold text-slate-600">
-              Applied to
-              <input
-                type="date"
-                value={placementEndDate}
-                min={placementStartDate || undefined}
-                onChange={(event) => setPlacementEndDate(event.target.value)}
-                className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
-              />
-            </label>
-            <button
-              type="button"
-              disabled={
-                !placementStartDate ||
-                !placementEndDate ||
-                placementStartDate > placementEndDate
-              }
-              onClick={() =>
-                setGeneratedPlacementRange({
-                  start: placementStartDate,
-                  end: placementEndDate,
-                })
-              }
-              className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Generate report
-            </button>
-            {(placementStartDate || placementEndDate || generatedPlacementRange) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setPlacementStartDate("");
-                  setPlacementEndDate("");
-                  setGeneratedPlacementRange(null);
-                }}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-              >
-                Clear
-              </button>
-            )}
-          </div>
         </div>
 
-        {!placementReportIsCurrent ? (
+        {!applicationDateRange ? (
           <p className="border-t border-slate-100 px-5 py-10 text-center text-sm text-slate-500">
-            Select an application date range and generate a report to view results.
+            Apply an application date range to view the placement report.
           </p>
         ) : (
           <>
@@ -788,15 +1258,15 @@ if (statusCounts.has(normalizedStatus)) {
               <div>
                 <p>
                   Application date range:{" "}
-                  {formatReportDate(generatedPlacementRange.start)}
+                  {formatReportDate(applicationDateRange.start)}
                   {" – "}
-                  {formatReportDate(generatedPlacementRange.end)}
+                  {formatReportDate(applicationDateRange.end)}
                 </p>
                 <p className="mt-1">{placementApplications.length} applicants</p>
               </div>
               {placementApplications.length > 0 && (
                 <ExportFormatControl
-                  filename={`placement-status-report-${generatedPlacementRange.start}-to-${generatedPlacementRange.end}`}
+                  filename={`placement-status-report-${applicationDateRange.start}-to-${applicationDateRange.end}`}
                   columns={PLACEMENT_REPORT_COLUMNS}
                   rows={placementExportRows}
                   buttonLabel="Export report"
@@ -883,17 +1353,30 @@ if (statusCounts.has(normalizedStatus)) {
         )}
       </section>
 
-      {/* CHARTS AND SHARED INSIGHT PANEL */}
+      {/* DESCRIPTIVE ANALYTICS */}
 
-      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <section aria-labelledby="descriptive-analytics-title" className="space-y-5">
+        <div>
+          <h2
+            id="descriptive-analytics-title"
+            className="text-xl font-bold text-slate-800"
+          >
+            Descriptive Analytics
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Explore application trends, job-seeker profiles, and graduate outcomes. Select a chart bar for a focused finding and recommended action.
+          </p>
+        </div>
+
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
 
         {/* LEFT: ANALYTICS CHARTS */}
 
-        <div className="grid min-w-0 gap-6 md:grid-cols-2">
+        <div className="grid min-w-0 gap-5 md:grid-cols-6">
 
           {/* MONTHLY APPLICATION TRENDS */}
 
-          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-2">
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-6">
 
             <div className="mb-5">
               <h3 className="text-lg font-bold text-slate-800">
@@ -901,11 +1384,13 @@ if (statusCounts.has(normalizedStatus)) {
               </h3>
 
               <p className="mt-1 text-sm text-slate-500">
-                Applications received during the last six months.
+                {applicationDateRange
+                  ? "Applications in the selected date range, grouped by month."
+                  : "Applications received during the last six months."}
               </p>
             </div>
 
-            <div className="h-[280px] w-full">
+            <div className="h-[320px] w-full">
 
               <ResponsiveContainer width="100%" height="100%">
 
@@ -992,7 +1477,7 @@ if (statusCounts.has(normalizedStatus)) {
 
           {/* TOP 5 JOB TITLES */}
 
-          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-3">
 
             <div className="mb-5">
               <h3 className="text-lg font-bold text-slate-800">
@@ -1012,7 +1497,7 @@ if (statusCounts.has(normalizedStatus)) {
 
             ) : (
 
-              <div className="h-[280px] w-full">
+              <div className="h-[220px] w-full">
 
                 <ResponsiveContainer width="100%" height="100%">
 
@@ -1104,7 +1589,7 @@ if (statusCounts.has(normalizedStatus)) {
 
           {/* TOP 5 COMPANIES */}
 
-          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-3">
 
             <div className="mb-5">
               <h3 className="text-lg font-bold text-slate-800">
@@ -1124,7 +1609,7 @@ if (statusCounts.has(normalizedStatus)) {
 
             ) : (
 
-              <div className="h-[280px] w-full">
+              <div className="h-[220px] w-full">
 
                 <ResponsiveContainer width="100%" height="100%">
 
@@ -1214,9 +1699,361 @@ if (statusCounts.has(normalizedStatus)) {
 
           </div>
 
+          {/* JOB SEEKER GENDER DISTRIBUTION */}
+
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-3">
+            <div className="mb-5">
+              <h3 className="text-lg font-bold text-slate-800">
+                Job Seeker Gender Distribution
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Male and female job seekers with completed profile details.
+              </p>
+            </div>
+
+            {genderBreakdown.every((item) => item.value === 0) ? (
+              <p className="py-8 text-center text-sm text-slate-500">
+                No completed male or female job-seeker profiles are available yet.
+              </p>
+            ) : (
+              <>
+                <div className="h-[180px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={genderBreakdown}
+                        dataKey="value"
+                        nameKey="label"
+                        innerRadius={46}
+                        outerRadius={72}
+                        paddingAngle={3}
+                      >
+                        {genderBreakdown.map((item) => (
+                          <Cell key={item.label} fill={item.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={tooltipStyle} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <ul className="mt-3 flex justify-center gap-8">
+                  {genderBreakdown.map((item) => (
+                    <li
+                      key={item.label}
+                      className="flex items-center gap-2 text-sm text-slate-600"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="h-3 w-3 rounded-full"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      <span>{item.label}</span>
+                      <span className="font-semibold text-slate-800">
+                        {item.value}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+
+          {/* 4PS BENEFICIARY DISTRIBUTION */}
+
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-3">
+            <div className="mb-5">
+              <h3 className="text-lg font-bold text-slate-800">
+                4Ps Beneficiary Status
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Yes and No responses from job seekers with completed profiles.
+              </p>
+            </div>
+
+            {fourPsRespondentCount === 0 ? (
+              <p className="py-8 text-center text-sm text-slate-500">
+                No completed job-seeker profiles with a 4Ps response are available yet.
+              </p>
+            ) : (
+              <div className="grid items-center gap-4 sm:grid-cols-[minmax(150px,1fr)_minmax(0,1.2fr)]">
+                <div className="relative h-[180px] min-w-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={fourPsBreakdown}
+                        dataKey="value"
+                        nameKey="label"
+                        innerRadius={46}
+                        outerRadius={72}
+                        paddingAngle={3}
+                      >
+                        {fourPsBreakdown.map((item) => (
+                          <Cell key={item.label} fill={item.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={tooltipStyle} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-2xl font-bold text-slate-800">
+                      {fourPsRespondentCount.toLocaleString()}
+                    </span>
+                    <span className="text-xs text-slate-500">Profiles</span>
+                  </div>
+                </div>
+
+                <ul className="space-y-3">
+                  {fourPsBreakdown.map((item) => {
+                    const percentage = Math.round(
+                      (item.value / fourPsRespondentCount) * 100,
+                    );
+
+                    return (
+                      <li
+                        key={item.label}
+                        className="flex items-center justify-between gap-3 text-sm text-slate-600"
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span
+                            aria-hidden="true"
+                            className="h-3 w-3 shrink-0 rounded-full"
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <span>{item.label}</span>
+                        </span>
+                        <span className="font-semibold text-slate-800">
+                          {item.value.toLocaleString()} ({percentage}%)
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {/* JOB SEEKER DISABILITY BREAKDOWN */}
+
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-3">
+            <div className="mb-5">
+              <h3 className="text-lg font-bold text-slate-800">
+                Job Seeker Disability Breakdown
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Completed profiles by disability category. N/A is shown separately.
+              </p>
+            </div>
+
+            {disabilityBreakdown.every((item) => item.value === 0) ? (
+              <p className="py-8 text-center text-sm text-slate-500">
+                No completed job-seeker profiles with disability information are available yet.
+              </p>
+            ) : (
+              <div className="h-[230px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={disabilityBreakdown}
+                    layout="vertical"
+                    margin={{ top: 5, right: 35, left: 5, bottom: 5 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      horizontal={false}
+                      stroke="#E2E8F0"
+                    />
+                    <XAxis
+                      type="number"
+                      allowDecimals={false}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: "#64748B", fontSize: 11 }}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="label"
+                      width={105}
+                      interval={0}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: "#475569", fontSize: 11 }}
+                    />
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      cursor={{ fill: "#F1F5F9" }}
+                    />
+                    <Bar
+                      dataKey="value"
+                      name="Job Seekers"
+                      radius={[0, 6, 6, 0]}
+                      barSize={20}
+                    >
+                      {disabilityBreakdown.map((item) => (
+                        <Cell
+                          key={item.label}
+                          fill={item.label === "N/A" ? "#94A3B8" : BLUE}
+                        />
+                      ))}
+                      <LabelList
+                        dataKey="value"
+                        position="right"
+                        fill="#475569"
+                        fontSize={11}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          {/* VERIFIED JOB SEEKERS BY UNEMPLOYMENT REASON */}
+
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-6">
+            <div className="mb-5">
+              <h3 className="text-lg font-bold text-slate-800">
+                Verified Job Seekers by Unemployment Reason
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Includes all verified job seekers regardless of current employment status. Profiles without a reason are shown as Not specified.
+              </p>
+            </div>
+
+            {graduateTracking.reasonBreakdown.every((item) => item.value === 0) ? (
+              <p className="py-8 text-center text-sm text-slate-500">
+                No verified job-seeker profiles are available yet.
+              </p>
+            ) : (
+              <div className="h-[320px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={graduateTracking.reasonBreakdown}
+                    layout="vertical"
+                    margin={{ top: 5, right: 35, left: 5, bottom: 5 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      horizontal={false}
+                      stroke="#E2E8F0"
+                    />
+                    <XAxis
+                      type="number"
+                      allowDecimals={false}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: "#64748B", fontSize: 11 }}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="label"
+                      width={205}
+                      interval={0}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: "#475569", fontSize: 11 }}
+                    />
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      cursor={{ fill: "#F1F5F9" }}
+                    />
+                    <Bar
+                      dataKey="value"
+                      name="Verified job seekers"
+                      radius={[0, 6, 6, 0]}
+                      barSize={20}
+                    >
+                      {graduateTracking.reasonBreakdown.map((item) => (
+                        <Cell
+                          key={item.label}
+                          fill={
+                            item.label === "New entrant/Fresh graduate"
+                              ? RED
+                              : item.label === "Not specified"
+                                ? "#94A3B8"
+                                : BLUE
+                          }
+                        />
+                      ))}
+                      <LabelList
+                        dataKey="value"
+                        position="right"
+                        fill="#475569"
+                        fontSize={11}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          {/* FRESH GRADUATE APPLICATION OUTCOMES */}
+
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-6">
+            <div className="mb-5">
+              <h3 className="text-lg font-bold text-slate-800">
+                Fresh Graduate Outcome Rates
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                {applicationDateRange
+                  ? "Each verified fresh graduate is counted once using their latest application in this range; those without an application in range are shown separately."
+                  : "Each verified fresh graduate is counted once using their latest application status."}
+              </p>
+            </div>
+
+            {graduateTracking.freshGraduateCount === 0 ? (
+              <p className="py-8 text-center text-sm text-slate-500">
+                No verified fresh-graduate profiles are available yet.
+              </p>
+            ) : (
+              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {graduateTracking.freshGraduateOutcomeSummary.map((item) => (
+                  <li
+                    key={item.key}
+                    className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                  >
+                    <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
+                      <span
+                        aria-hidden="true"
+                        className="h-3 w-3 shrink-0 rounded-full"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      {item.key === "noApplication" && applicationDateRange
+                        ? "No application in range"
+                        : item.label}
+                    </div>
+                    <p className="mt-2 text-2xl font-bold text-slate-800">
+                      {item.percentage.toFixed(1)}%
+                    </p>
+                    <div
+                      className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200"
+                      role="progressbar"
+                      aria-label={`${item.label} share`}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={item.percentage}
+                    >
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${Math.min(100, item.percentage)}%`,
+                          backgroundColor: item.color,
+                        }}
+                      />
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">
+                      {item.value.toLocaleString()} of{" "}
+                      {graduateTracking.freshGraduateCount.toLocaleString()}{" "}
+                      verified fresh graduates
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           {/* APPLICATION STATUS BREAKDOWN */}
 
-          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-2">
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-3">
 
             <div className="mb-5">
               <h3 className="text-lg font-bold text-slate-800">
@@ -1238,7 +2075,7 @@ if (statusCounts.has(normalizedStatus)) {
 
             ) : (
 
-              <div className="h-[260px] w-full">
+              <div className="h-[220px] w-full">
 
                 <ResponsiveContainer width="100%" height="100%">
 
@@ -1330,7 +2167,7 @@ if (statusCounts.has(normalizedStatus)) {
 
           {/* JOB POST STATUS BREAKDOWN */}
 
-          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-2">
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-3">
 
             <div className="mb-5">
               <h3 className="text-lg font-bold text-slate-800">
@@ -1338,7 +2175,7 @@ if (statusCounts.has(normalizedStatus)) {
               </h3>
 
               <p className="mt-1 text-sm text-slate-500">
-                Distribution of active job posts by current status.
+                Distribution of job posts by current status.
               </p>
             </div>
 
@@ -1350,7 +2187,7 @@ if (statusCounts.has(normalizedStatus)) {
 
             ) : (
 
-              <div className="h-[260px] w-full">
+              <div className="h-[220px] w-full">
 
                 <ResponsiveContainer width="100%" height="100%">
 
@@ -1445,22 +2282,18 @@ if (statusCounts.has(normalizedStatus)) {
         {/* RIGHT: SHARED INSIGHT PANEL */}
 
         <aside className="h-fit rounded-xl border border-slate-200 bg-white p-5 shadow-sm xl:sticky xl:top-6">
-
           <div className="flex items-start justify-between gap-3">
-
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
-                Analytics Insights
+                Descriptive Analytics
               </p>
-
               <h3 className="mt-2 text-xl font-bold text-slate-800">
-                {selectedInsight
-                  ? selectedInsight.label
-                  : "Selected Chart Insight"}
+                {activeSelectedInsight
+                  ? activeSelectedInsight.label
+                  : "Insights & Recommendations"}
               </h3>
             </div>
-
-            {selectedInsight && (
+            {activeSelectedInsight && (
               <button
                 type="button"
                 onClick={() => setSelectedInsight(null)}
@@ -1469,124 +2302,88 @@ if (statusCounts.has(normalizedStatus)) {
                 Clear
               </button>
             )}
-
           </div>
 
-          {selectedInsight ? (
-
-            <div className="mt-6 space-y-5">
-
-              {/* SELECTED VALUE */}
-
-              <div className="rounded-xl bg-slate-50 p-4">
-
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {selectedInsight.category === "month"
-                    ? "Monthly Applications"
-                    : "Total Applications"}
+          {activeSelectedInsight && selectedInsightDetails ? (
+            <div className="mt-5 space-y-4">
+              <section className="rounded-xl bg-slate-50 p-4">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Key insight
+                </h4>
+                <p className="mt-2 text-3xl font-bold text-[#203F8B]">
+                  {activeSelectedInsight.value.toLocaleString()}
                 </p>
-
-                <p className="mt-2 text-4xl font-bold text-[#203F8B]">
-                  {selectedInsight.value.toLocaleString()}
-                </p>
-
                 <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                  {insightDescription}
+                  {selectedInsightDetails.finding}
                 </p>
+              </section>
 
-              </div>
-
-              {/* RECOMMENDED ACTION */}
-
-              <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
-
-                <div className="flex items-center gap-2">
-
-                  <svg
-                    className="h-5 w-5 text-[#203F8B]"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.8}
-                      d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.364-6.364-1.414 1.414M7.05 16.95l-1.414 1.414m12.728 0-1.414-1.414M7.05 7.05 5.636 5.636M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
-                    />
-                  </svg>
-
-                  <h4 className="text-sm font-bold text-blue-900">
-                    Recommended Action
-                  </h4>
-
-                </div>
-
-                <p className="mt-3 text-sm leading-relaxed text-blue-800">
-                  {recommendedAction}
+              <section className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-900">
+                  Recommended action
+                </h4>
+                <p className="mt-2 text-sm leading-relaxed text-blue-800">
+                  {selectedInsightDetails.recommendation}
                 </p>
+              </section>
 
-              </div>
-
-              {/* SELECTED CATEGORY */}
-
-              <div className="border-t border-slate-200 pt-4">
-
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Insight Category
-                </p>
-
-                <p className="mt-2 text-sm font-semibold capitalize text-slate-800">
-                  {selectedInsight.category}
-                </p>
-
-              </div>
-
+              <p className="text-xs capitalize text-slate-500">
+                Based on {activeSelectedInsight.category} data
+              </p>
             </div>
-
           ) : (
+            <div className="mt-5 space-y-5">
+              <section>
+                <h4 className="text-sm font-bold text-slate-800">
+                  Key findings
+                </h4>
+                <ul className="mt-3 space-y-3">
+                  {overviewInsights.map((insight) => (
+                    <li
+                      key={insight.title}
+                      className="rounded-lg bg-slate-50 p-3"
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {insight.title}
+                      </p>
+                      <p className="mt-1 text-sm leading-relaxed text-slate-700">
+                        {insight.finding}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </section>
 
-            <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5">
+              <section>
+                <h4 className="text-sm font-bold text-slate-800">
+                  Recommendations
+                </h4>
+                <ul className="mt-3 space-y-3">
+                  {overviewInsights.map((insight) => (
+                    <li
+                      key={insight.title}
+                      className="border-l-2 border-blue-600 pl-3"
+                    >
+                      <p className="text-xs font-semibold text-blue-900">
+                        {insight.title}
+                      </p>
+                      <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                        {insight.recommendation}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </section>
 
-              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-blue-100 text-[#203F8B]">
-
-                <svg
-                  className="h-6 w-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.8}
-                    d="M4 19V5m0 14h16M8 15v-4m4 4V7m4 8v-6"
-                  />
-                </svg>
-
-              </div>
-
-              <h4 className="text-sm font-bold text-slate-800">
-                Explore Your Analytics
-              </h4>
-
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                Select any bar from the charts to view detailed insights and recommended actions here.
+              <p className="border-t border-slate-200 pt-3 text-xs text-slate-500">
+                Select a bar in the application or job-post charts for a focused finding.
               </p>
-
-              <p className="mt-4 text-xs text-slate-500">
-                Your selected chart information will appear in this panel.
-              </p>
-
             </div>
-
           )}
-
         </aside>
 
       </div>
+      </section>
 
       {/* APPLICATION STATISTICS AND SYSTEM SUMMARY */}
 
@@ -1616,6 +2413,12 @@ if (statusCounts.has(normalizedStatus)) {
             Application Statistics
 
           </h4>
+
+          <p className="mt-1 text-sm text-slate-500">
+            {applicationDateRange
+              ? "Counts reflect applications submitted within the selected date range."
+              : "Counts reflect all available applications."}
+          </p>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
 

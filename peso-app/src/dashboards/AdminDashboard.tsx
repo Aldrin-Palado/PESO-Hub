@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { supabase } from "../services/supabase";
 
 import AdminSidebar, {
@@ -270,6 +277,9 @@ export default function AdminDashboard() {
 
   const [analyticsError, setAnalyticsError] =
   useState("");
+  const [analyticsRealtimeUnavailable, setAnalyticsRealtimeUnavailable] =
+    useState(false);
+  const analyticsRequestVersion = useRef(0);
 
   const [applicationsError, setApplicationsError] =
     useState("");
@@ -1039,8 +1049,9 @@ export default function AdminDashboard() {
     };
   }, [account, activePage, loadDashboardCounts, permissions]);
 
-  const loadAnalyticsData = async () => {
-  setAnalyticsLoading(true);
+  const loadAnalyticsData = useCallback(async (showLoading = true) => {
+  const requestVersion = ++analyticsRequestVersion.current;
+  if (showLoading) setAnalyticsLoading(true);
   setAnalyticsError("");
 
   try {
@@ -1153,7 +1164,9 @@ export default function AdminDashboard() {
   while (true) {
     const { data, error } = await supabase
       .from("job_seeker")
-      .select("job_seeker_id, full_name, created_at")
+    .select(
+      "job_seeker_id, full_name, email, verification_status, registration_details, resume_url, created_at",
+    )
       .order("job_seeker_id", { ascending: true })
       .range(from, from + pageSize - 1);
 
@@ -1186,6 +1199,8 @@ export default function AdminDashboard() {
       throw new Error(errors.join(" | "));
     }
 
+    if (requestVersion !== analyticsRequestVersion.current) return;
+
     const applicationData = applicationsResult.data ?? [];
     const jobData = jobsResult.data ?? [];
     const employerData = employersResult.data ?? [];
@@ -1204,6 +1219,8 @@ export default function AdminDashboard() {
     });
 
   } catch (error) {
+    if (requestVersion !== analyticsRequestVersion.current) return;
+
     console.error("Analytics loading error:", error);
 
     setAnalyticsError(
@@ -1213,9 +1230,97 @@ export default function AdminDashboard() {
     );
 
   } finally {
-    setAnalyticsLoading(false);
+    if (requestVersion === analyticsRequestVersion.current) {
+      setAnalyticsLoading(false);
+    }
   }
-};
+}, []);
+
+  useEffect(() => {
+    if (!account || activePage !== "Analytics & Reports") return;
+
+    let active = true;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let fallbackPoll: ReturnType<typeof setInterval> | null = null;
+    const scheduleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        void loadAnalyticsData(false);
+      }, 150);
+    };
+    const channel = supabase
+      .channel(`admin-analytics-${account.user_id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "job_seeker",
+        },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "application",
+        },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "employer",
+        },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "job_vacancy",
+        },
+        scheduleRefresh,
+      )
+      .subscribe((status, subscriptionError) => {
+        if (!active) return;
+
+        if (status === "SUBSCRIBED") {
+          if (fallbackPoll) {
+            clearInterval(fallbackPoll);
+            fallbackPoll = null;
+          }
+          setAnalyticsRealtimeUnavailable(false);
+          void loadAnalyticsData(false);
+        } else if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED"
+        ) {
+          console.error(
+            "Admin analytics realtime subscription failed:",
+            { status, error: subscriptionError },
+          );
+          setAnalyticsRealtimeUnavailable(true);
+          if (!fallbackPoll) {
+            fallbackPoll = setInterval(() => {
+              void loadAnalyticsData(false);
+            }, 30000);
+          }
+        }
+      });
+
+    return () => {
+      active = false;
+      if (refreshTimer) clearTimeout(refreshTimer);
+      if (fallbackPoll) clearInterval(fallbackPoll);
+      void supabase.removeChannel(channel);
+    };
+  }, [account, activePage, loadAnalyticsData]);
 
   /* ============================================================
      JOB POSTS
@@ -2179,6 +2284,7 @@ export default function AdminDashboard() {
             jobSeekers={jobSeekers}
             loading={analyticsLoading}
             loadError={analyticsError}
+            realtimeUnavailable={analyticsRealtimeUnavailable}
             StatCard={StatCard}
             AnalyticsCard={AnalyticsCard}
             SummaryRow={SummaryRow}
