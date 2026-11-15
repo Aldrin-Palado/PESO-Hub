@@ -89,7 +89,7 @@ export function getIncompleteJobSeekerProfileSections(
   }
 
   if (
-    !hasAll(["preferredOccupation", "companyApplyingFor(put N/A if undecided)", "preferredWorkLocation"]) ||
+    !hasAll(["preferredOccupation", "companyApplyingFor", "preferredWorkLocation"]) ||
     (details.preferredWorkLocation === "Other" &&
       !hasValue(details, "otherWorkLocation"))
   ) {
@@ -114,7 +114,7 @@ export function getIncompleteJobSeekerProfileSections(
     incomplete.push(JOB_SEEKER_PROFILE_SECTION_TITLES[3]);
   }
 
-  if (!hasAll(["training1(put N/A if none)", "training2(put N/A if none)", "training3(put N/A if none)"])) {
+  if (!hasAll(["training1", "training2", "training3"])) {
     incomplete.push(JOB_SEEKER_PROFILE_SECTION_TITLES[4]);
   }
 
