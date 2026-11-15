@@ -7,9 +7,12 @@ type TurnstileRenderOptions = {
   sitekey: string;
   theme: TurnstileTheme;
   size: TurnstileSize;
+  appearance: "always";
+  execution: "execute";
   callback: (token: string) => void;
   "expired-callback": () => void;
   "error-callback": () => void;
+  "timeout-callback": () => void;
 };
 
 type TurnstileApi = {
@@ -17,6 +20,7 @@ type TurnstileApi = {
     container: HTMLElement,
     options: TurnstileRenderOptions,
   ) => string;
+  execute: (widgetId: string) => void;
   remove: (widgetId: string) => void;
 };
 
@@ -117,18 +121,23 @@ export default function Captcha({
     }
 
     let active = true;
-    let widgetId: string | undefined;
+    let renderedWidgetId: string | undefined;
     setLoadError("");
+    callbacksRef.current.onVerify("");
 
     void loadTurnstile()
       .then((turnstile) => {
         if (!active || !containerRef.current) return;
 
-        widgetId = turnstile.render(containerRef.current, {
+        renderedWidgetId = turnstile.render(containerRef.current, {
           sitekey: siteKey,
           theme,
           size,
-          callback: (token) => callbacksRef.current.onVerify(token),
+          appearance: "always",
+          execution: "execute",
+          callback: (token) => {
+            callbacksRef.current.onVerify(token);
+          },
           "expired-callback": () => {
             callbacksRef.current.onVerify("");
             callbacksRef.current.onExpire?.();
@@ -137,7 +146,11 @@ export default function Captcha({
             callbacksRef.current.onVerify("");
             callbacksRef.current.onError?.();
           },
+          "timeout-callback": () => {
+            callbacksRef.current.onVerify("");
+          },
         });
+        turnstile.execute(renderedWidgetId);
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -153,8 +166,8 @@ export default function Captcha({
 
     return () => {
       active = false;
-      if (widgetId && window.turnstile) {
-        window.turnstile.remove(widgetId);
+      if (renderedWidgetId && window.turnstile) {
+        window.turnstile.remove(renderedWidgetId);
       }
     };
   }, [siteKey, theme, size, resetKey]);
