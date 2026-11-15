@@ -10,7 +10,7 @@ type TurnstileApi = {
       theme?: "light" | "dark" | "auto";
       callback: (token: string) => void;
       "expired-callback"?: () => void;
-      "error-callback"?: () => void;
+      "error-callback"?: (errorCode?: string) => void;
     }
   ) => string;
   reset: (widgetId?: string) => void;
@@ -118,7 +118,12 @@ export default function Captcha({
 
   useEffect(() => {
     if (!siteKey) {
-      setError("Cloudflare Turnstile Site Key is missing.");
+      setError("Cloudflare Turnstile site key is missing. Set VITE_TURNSTILE_SITE_KEY in Vercel.");
+      callbacksRef.current.onVerify("");
+      return;
+    }
+    if (/^[a-f\d]{32,}$/i.test(siteKey)) {
+      setError("The configured value looks like a secret key. Use the public Turnstile site key for VITE_TURNSTILE_SITE_KEY.");
       callbacksRef.current.onVerify("");
       return;
     }
@@ -156,15 +161,16 @@ export default function Captcha({
             }
           },
 
-          "error-callback": () => {
+          "error-callback": (errorCode) => {
             if (!active) return;
 
             callbacksRef.current.onVerify("");
             callbacksRef.current.onError?.();
-
-            if (widgetIdRef.current !== null) {
-              api.reset(widgetIdRef.current);
-            }
+            setError(
+              errorCode
+                ? `Cloudflare Turnstile could not load (error ${errorCode}). Check that the public site key is correct and this domain is allowed in the Turnstile widget.`
+                : "Cloudflare Turnstile could not load. Check the public site key and allowed domains in the Turnstile widget.",
+            );
           },
         });
 
