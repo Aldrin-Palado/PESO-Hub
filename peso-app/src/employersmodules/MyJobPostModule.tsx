@@ -23,6 +23,8 @@ type JobPost = {
   status: string;
   date_posted: string;
   deadline: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
   image_url?: string | null;
 };
 
@@ -49,6 +51,9 @@ type JobForm = {
   job_classification: "local" | "international";
   vacancies_available: string;
   deadline: string;
+  salary_specified: boolean;
+  salary_min: string;
+  salary_max: string;
 };
 
 const emptyForm: JobForm = {
@@ -61,6 +66,9 @@ const emptyForm: JobForm = {
   job_classification: "local",
   vacancies_available: "1",
   deadline: "",
+  salary_specified: false,
+  salary_min: "",
+  salary_max: "",
 };
 
 const STORAGE_BUCKET = "job-images";
@@ -95,7 +103,10 @@ export default function MyJobPostModule({
 
   const imageInputRef = useRef<HTMLInputElement>(null);
 
-  const updateField = (field: keyof JobForm, value: string) => {
+  const updateField = (
+    field: Exclude<keyof JobForm, "salary_specified">,
+    value: string,
+  ) => {
     setForm((previous) => ({
       ...previous,
       [field]: value,
@@ -143,6 +154,9 @@ export default function MyJobPostModule({
       job_classification: job.job_classification ?? "local",
       vacancies_available: String(job.vacancies_available || 1),
       deadline: job.deadline ? job.deadline.slice(0, 10) : "",
+      salary_specified: job.salary_min != null || job.salary_max != null,
+      salary_min: job.salary_min == null ? "" : String(job.salary_min),
+      salary_max: job.salary_max == null ? "" : String(job.salary_max),
     });
 
     resetImage();
@@ -334,6 +348,19 @@ export default function MyJobPostModule({
       return;
     }
 
+    const salaryMin =
+      form.salary_specified && form.salary_min.trim()
+        ? Number(form.salary_min)
+        : null;
+    const salaryMax =
+      form.salary_specified && form.salary_max.trim()
+        ? Number(form.salary_max)
+        : null;
+    if (salaryMin !== null && salaryMax !== null && salaryMin > salaryMax) {
+      setMessage("Minimum salary cannot be greater than maximum salary.");
+      return;
+    }
+
     setSaving(true);
     setMessage("");
 
@@ -358,8 +385,8 @@ export default function MyJobPostModule({
             location: form.location.trim(),
             employment_type: form.employment_type,
             job_classification: form.job_classification,
-            salary_min: null,
-            salary_max: null,
+            salary_min: salaryMin,
+            salary_max: salaryMax,
             vacancies_available: Math.max(
               1,
               Number(form.vacancies_available) || 1
@@ -390,8 +417,8 @@ export default function MyJobPostModule({
             location: form.location.trim(),
             employment_type: form.employment_type,
             job_classification: form.job_classification,
-            salary_min: null,
-            salary_max: null,
+            salary_min: salaryMin,
+            salary_max: salaryMax,
             vacancies_available: Math.max(
               1,
               Number(form.vacancies_available) || 1
@@ -698,6 +725,85 @@ export default function MyJobPostModule({
                 <option value="Internship">Internship</option>
               </select>
             </label>
+
+            <fieldset className="md:col-span-2">
+              <legend className="text-sm font-semibold text-slate-700">
+                Salary
+              </legend>
+              <div
+                role="group"
+                aria-label="Salary disclosure"
+                className="mt-2 flex flex-wrap gap-2"
+              >
+                <button
+                  type="button"
+                  aria-pressed={form.salary_specified}
+                  onClick={() =>
+                    setForm((previous) => ({
+                      ...previous,
+                      salary_specified: true,
+                    }))
+                  }
+                  className={`rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
+                    form.salary_specified
+                      ? "border-blue-700 bg-blue-700 text-white"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-blue-50"
+                  }`}
+                >
+                  Specify salary
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={!form.salary_specified}
+                  onClick={() =>
+                    setForm((previous) => ({
+                      ...previous,
+                      salary_specified: false,
+                    }))
+                  }
+                  className={`rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
+                    !form.salary_specified
+                      ? "border-blue-700 bg-blue-700 text-white"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-blue-50"
+                  }`}
+                >
+                  Salary not specified
+                </button>
+              </div>
+            </fieldset>
+
+            {form.salary_specified && (
+              <>
+                <label className="text-sm font-semibold text-slate-700">
+                  Minimum Salary (₱)
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={form.salary_min}
+                    onChange={(event) =>
+                      updateField("salary_min", event.target.value)
+                    }
+                    placeholder="Enter minimum salary"
+                    className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
+                  />
+                </label>
+                <label className="text-sm font-semibold text-slate-700">
+                  Maximum Salary (₱)
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={form.salary_max}
+                    onChange={(event) =>
+                      updateField("salary_max", event.target.value)
+                    }
+                    placeholder="Enter maximum salary"
+                    className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
+                  />
+                </label>
+              </>
+            )}
 
             <label className="text-sm font-semibold text-slate-700">
               Job Classification *

@@ -3,17 +3,21 @@ import { useEffect, useRef, useState } from "react";
 
 type TurnstileApi = {
   ready: (callback: () => void) => void;
+
   render: (
     container: HTMLElement,
     options: {
       sitekey: string;
       theme?: "light" | "dark" | "auto";
+      size?: "normal" | "compact";
       callback: (token: string) => void;
       "expired-callback"?: () => void;
       "error-callback"?: () => void;
     }
   ) => string;
+
   reset: (widgetId?: string) => void;
+  remove: (widgetId: string) => void;
 };
 
 declare global {
@@ -27,61 +31,149 @@ type CaptchaProps = {
   onExpire?: () => void;
   onError?: () => void;
   siteKey?: string;
-  theme?: "light" | "dark";
+  theme?: "light" | "dark" | "auto";
   size?: "normal" | "compact";
   resetKey?: number;
   className?: string;
 };
 
-let turnstilePromise: Promise<TurnstileApi> | undefined;
+const TURNSTILE_SCRIPT_URL =
+  "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+
+let turnstilePromise: Promise<TurnstileApi> | null = null;
 
 function loadTurnstile(): Promise<TurnstileApi> {
-  if (turnstilePromise) return turnstilePromise;
+  if (window.turnstile) {
+    return new Promise((resolve, reject) => {
+      try {
+        window.turnstile!.ready(() => {
+          if (window.turnstile) {
+            resolve(window.turnstile);
+          } else {
+            reject(
+              new Error("Cloudflare Turnstile API unavailable.")
+            );
+          }
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
 
-  turnstilePromise = new Promise<TurnstileApi>((resolve, reject) => {
-    const finish = () => {
-      const api = window.turnstile;
+  if (turnstilePromise) {
+    return turnstilePromise;
+  }
 
-      if (!api) {
-        reject(new Error("Cloudflare Turnstile API unavailable."));
-        return;
+  turnstilePromise = new Promise<TurnstileApi>(
+    (resolve, reject) => {
+      let script = document.querySelector<HTMLScriptElement>(
+        'script[data-peso-turnstile="true"]'
+      );
+
+      const isNewScript = !script;
+      let settled = false;
+
+      if (!script) {
+        script = document.createElement("script");
+        script.src = TURNSTILE_SCRIPT_URL;
+        script.async = true;
+        script.defer = true;
+        script.dataset.pesoTurnstile = "true";
       }
 
-      api.ready(() => resolve(api));
-    };
+      const currentScript = script;
 
-    if (window.turnstile) {
-      finish();
-      return;
-    }
+      let timeout: number;
 
-    const existing = document.querySelector<HTMLScriptElement>(
-      'script[data-peso-turnstile="true"]'
-    );
+      const cleanup = () => {
+        currentScript.removeEventListener("load", handleLoad);
+        currentScript.removeEventListener("error", handleError);
+        window.clearTimeout(timeout);
+      };
 
-    if (existing) {
-      existing.addEventListener("load", finish, { once: true });
-      existing.addEventListener(
-        "error",
-        () => reject(new Error("CAPTCHA script failed.")),
+      const rejectLoad = (error: Error) => {
+        if (settled) return;
+
+        settled = true;
+        cleanup();
+        turnstilePromise = null;
+
+        reject(error);
+      };
+
+      const resolveWhenReady = () => {
+        if (settled) return;
+
+        const api = window.turnstile;
+
+        if (!api || typeof api.ready !== "function") {
+          rejectLoad(
+            new Error("Cloudflare Turnstile API unavailable.")
+          );
+          return;
+        }
+
+        api.ready(() => {
+          if (settled) return;
+
+          const readyApi = window.turnstile;
+
+          if (
+            readyApi &&
+            typeof readyApi.render === "function" &&
+            typeof readyApi.reset === "function" &&
+            typeof readyApi.remove === "function"
+          ) {
+            settled = true;
+            cleanup();
+            resolve(readyApi);
+          } else {
+            rejectLoad(
+              new Error("Cloudflare Turnstile failed to initialize.")
+            );
+          }
+        });
+      };
+
+      const handleLoad = () => {
+        resolveWhenReady();
+      };
+
+      const handleError = () => {
+        rejectLoad(
+          new Error("Unable to load Cloudflare Turnstile.")
+        );
+      };
+
+      currentScript.addEventListener(
+        "load",
+        handleLoad,
         { once: true }
       );
-      return;
+
+      currentScript.addEventListener(
+        "error",
+        handleError,
+        { once: true }
+      );
+
+      timeout = window.setTimeout(() => {
+        rejectLoad(
+          new Error(
+            "CAPTCHA loading timed out. Please refresh and try again."
+          )
+        );
+      }, 15000);
+
+      if (window.turnstile) {
+        resolveWhenReady();
+      } else if (isNewScript) {
+        document.head.appendChild(currentScript);
+      }
     }
-
-    const script = document.createElement("script");
-    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-    script.async = true;
-    script.defer = true;
-    script.dataset.pesoTurnstile = "true";
-
-    script.onload = finish;
-    script.onerror = () =>
-      reject(new Error("Unable to load Cloudflare Turnstile."));
-
-    document.head.appendChild(script);
-  }).catch((error) => {
-    turnstilePromise = undefined;
+  ).catch((error) => {
+    turnstilePromise = null;
     throw error;
   });
 
@@ -92,14 +184,18 @@ export default function Captcha({
   onVerify,
   onExpire,
   onError,
-  siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? import.meta.env.VITE_RECAPTCHA_SITE_KEY,
+  siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY,
   theme = "light",
   size = "normal",
   resetKey = 0,
   className = "",
 }: CaptchaProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+
   const widgetIdRef = useRef<string | null>(null);
+
+  const previousResetKeyRef = useRef(resetKey);
+
   const callbacksRef = useRef({
     onVerify,
     onExpire,
@@ -108,6 +204,7 @@ export default function Captcha({
 
   const [error, setError] = useState("");
 
+  // Keep callbacks updated.
   useEffect(() => {
     callbacksRef.current = {
       onVerify,
@@ -116,32 +213,45 @@ export default function Captcha({
     };
   }, [onVerify, onExpire, onError]);
 
+  // Load and render CAPTCHA.
   useEffect(() => {
-    if (!siteKey) {
-      setError("Cloudflare Turnstile Site Key is missing.");
-      callbacksRef.current.onVerify("");
-      return;
-    }
-
-    let active = true;
     const container = containerRef.current;
 
     if (!container) return;
 
+    if (!siteKey?.trim()) {
+      setError(
+        "Cloudflare Turnstile Site Key is missing."
+      );
+
+      callbacksRef.current.onVerify("");
+      callbacksRef.current.onError?.();
+
+      return;
+    }
+
+    let active = true;
+
+    let renderedWidgetId: string | null = null;
+
     setError("");
     callbacksRef.current.onVerify("");
 
-    loadTurnstile()
+    container.replaceChildren();
+
+    void loadTurnstile()
       .then((api) => {
         if (!active) return;
 
-        container.replaceChildren();
-
         const widgetId = api.render(container, {
-          sitekey: siteKey,
+          sitekey: siteKey.trim(),
           theme,
-          callback: (token) => {
+          size,
+
+          callback: (token: string) => {
             if (!active) return;
+
+            setError("");
             callbacksRef.current.onVerify(token);
           },
 
@@ -150,56 +260,90 @@ export default function Captcha({
 
             callbacksRef.current.onVerify("");
             callbacksRef.current.onExpire?.();
-
-            if (widgetIdRef.current !== null) {
-              api.reset(widgetIdRef.current);
-            }
           },
 
           "error-callback": () => {
             if (!active) return;
 
             callbacksRef.current.onVerify("");
-            callbacksRef.current.onError?.();
 
-            if (widgetIdRef.current !== null) {
-              api.reset(widgetIdRef.current);
-            }
+            setError(
+              "CAPTCHA verification failed. Please try again."
+            );
+
+            callbacksRef.current.onError?.();
           },
         });
 
+        renderedWidgetId = widgetId;
         widgetIdRef.current = widgetId;
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         if (!active) return;
 
-        console.error("CAPTCHA error:", err);
-        setError("Unable to load CAPTCHA. Please refresh.");
+        console.error("Cloudflare Turnstile error:", err);
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Unable to load CAPTCHA. Please refresh."
+        );
+
         callbacksRef.current.onVerify("");
         callbacksRef.current.onError?.();
       });
 
     return () => {
       active = false;
-      widgetIdRef.current = null;
+
+      if (renderedWidgetId !== null) {
+        apiCleanup(renderedWidgetId);
+      }
+
+      if (widgetIdRef.current === renderedWidgetId) {
+        widgetIdRef.current = null;
+      }
+
       container.replaceChildren();
     };
   }, [siteKey, theme, size]);
 
+  // Reset CAPTCHA when resetKey changes.
   useEffect(() => {
-    if (widgetIdRef.current === null) return;
+    if (previousResetKeyRef.current === resetKey) {
+      return;
+    }
+
+    previousResetKeyRef.current = resetKey;
 
     callbacksRef.current.onVerify("");
+    setError("");
 
-    window.turnstile?.reset(widgetIdRef.current);
+    if (
+      widgetIdRef.current !== null &&
+      window.turnstile
+    ) {
+      window.turnstile.reset(widgetIdRef.current);
+    }
   }, [resetKey]);
+
+  function apiCleanup(widgetId: string) {
+    try {
+      window.turnstile?.remove(widgetId);
+    } catch (error) {
+      console.warn("Unable to remove CAPTCHA widget:", error);
+    }
+  }
 
   return (
     <div className={className}>
       <div ref={containerRef} />
 
       {error && (
-        <p role="alert" className="mt-2 text-sm text-red-700">
+        <p
+          role="alert"
+          className="mt-2 text-sm text-red-700"
+        >
           {error}
         </p>
       )}
