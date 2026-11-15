@@ -1,6 +1,7 @@
 type RecaptchaVerification = {
   success: boolean;
   hostname?: string;
+  "error-codes"?: string[];
 };
 
 type AuthResponse = {
@@ -60,11 +61,15 @@ function jsonResponse(
   });
 }
 
-async function verifyRecaptcha(token: string): Promise<boolean> {
+async function verifyRecaptcha(
+  token: string,
+): Promise<{ valid: true } | { valid: false; error: string }> {
   const secret = Deno.env.get("RECAPTCHA_SECRET_KEY");
   if (!secret || allowedHostnames.length === 0) {
     console.error("CAPTCHA authentication is missing server configuration.");
-    throw new Error("CAPTCHA verification is not configured.");
+    throw new Error(
+      "CAPTCHA verification is not configured. Set RECAPTCHA_SECRET_KEY and RECAPTCHA_ALLOWED_HOSTNAMES in Supabase Function Secrets.",
+    );
   }
 
   const body = new URLSearchParams({ secret, response: token });
@@ -83,14 +88,49 @@ async function verifyRecaptcha(token: string): Promise<boolean> {
   }
 
   const result = await response.json() as RecaptchaVerification;
-  if (
-    result.success !== true ||
-    typeof result.hostname !== "string" ||
-    !allowedHostnames.includes(result.hostname.toLowerCase())
-  ) {
-    return false;
+  if (result.success !== true) {
+    const errorCodes = Array.isArray(result["error-codes"])
+      ? result["error-codes"].filter((code) => typeof code === "string")
+      : [];
+    console.warn("Google reCAPTCHA rejected the login token:", errorCodes);
+
+    if (errorCodes.includes("invalid-input-secret")) {
+      return {
+        valid: false,
+        error:
+          "Google rejected the reCAPTCHA secret. Check that RECAPTCHA_SECRET_KEY is the secret paired with the configured v2 checkbox site key.",
+      };
+    }
+    if (
+      errorCodes.includes("timeout-or-duplicate") ||
+      errorCodes.includes("invalid-input-response")
+    ) {
+      return {
+        valid: false,
+        error: "The CAPTCHA expired or was already used. Please complete it again.",
+      };
+    }
+    return {
+      valid: false,
+      error:
+        "Google rejected the CAPTCHA response. Check that the v2 checkbox site key and Supabase secret belong to the same reCAPTCHA registration.",
+    };
   }
-  return true;
+
+  if (typeof result.hostname !== "string") {
+    return {
+      valid: false,
+      error: "Google did not return a hostname for the CAPTCHA response.",
+    };
+  }
+  if (!allowedHostnames.includes(result.hostname.toLowerCase())) {
+    console.warn("Google reCAPTCHA hostname is not allowlisted:", result.hostname);
+    return {
+      valid: false,
+      error: `CAPTCHA hostname mismatch: Google verified "${result.hostname}". Add that exact hostname to RECAPTCHA_ALLOWED_HOSTNAMES and the allowed domains in Google reCAPTCHA settings.`,
+    };
+  }
+  return { valid: true };
 }
 
 Deno.serve(async (request: Request) => {
@@ -164,9 +204,9 @@ Deno.serve(async (request: Request) => {
   }
 
   try {
-    const captchaValid = await verifyRecaptcha(captchaToken);
-    if (!captchaValid) {
-      return respond({ error: "CAPTCHA verification failed. Please try again." }, 400);
+    const captchaResult = await verifyRecaptcha(captchaToken);
+    if (!captchaResult.valid) {
+      return respond({ error: captchaResult.error }, 400);
     }
 
     if (mode === "verify") {

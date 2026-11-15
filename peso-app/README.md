@@ -21,7 +21,8 @@ VITE_RECAPTCHA_SITE_KEY=<Google reCAPTCHA v2 site key>
 
 Configure these secrets in the Supabase project. `RECAPTCHA_ALLOWED_HOSTNAMES` is
 a comma-separated list of exact hostnames registered for the reCAPTCHA site key;
-include the local development hostname if testing locally.
+include `peso-mabini-copy.vercel.app` for the deployed site and the local development
+hostname if testing locally.
 
 - `RECAPTCHA_SECRET_KEY` (keep this server-side; never use a `VITE_` variable)
 - `RECAPTCHA_ALLOWED_HOSTNAMES` (for example, `peso.example.gov,localhost`)
