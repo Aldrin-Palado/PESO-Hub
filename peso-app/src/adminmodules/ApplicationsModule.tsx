@@ -4,6 +4,7 @@ import type { ApplicationDecisionResult } from "../services/applicationDecisions
 import ApplicationScopeToggle from "../components/ApplicationScopeToggle";
 import ModuleScoreboard from "../components/ModuleScoreboard";
 import FilterDropdown from "../components/FilterDropdown";
+import { getApplicationStatusStyles } from "../utils/applicationStatusStyles";
 
 type Application = {
   id?: string;
@@ -52,14 +53,14 @@ type Props = {
 };
 
 const STATUSES = [
-  { value: "pending", label: "Pending", color: "bg-slate-100 text-slate-600" },
-  { value: "under_review", label: "Under Review", color: "bg-blue-100 text-blue-700" },
-  { value: "shortlisted", label: "Shortlisted", color: "bg-indigo-100 text-indigo-700" },
-  { value: "qualified", label: "Qualified", color: "bg-violet-100 text-violet-700" },
-  { value: "interviewed", label: "Interviewed", color: "bg-amber-100 text-amber-700" },
-  { value: "withdrawn", label: "Withdrawn", color: "bg-gray-100 text-gray-600" },
-  { value: "hired", label: "You're Hired", color: "bg-emerald-100 text-emerald-700" },
-  { value: "rejected", label: "Rejected", color: "bg-red-100 text-red-700" },
+  { value: "pending", label: "Pending", color: getApplicationStatusStyles("pending") },
+  { value: "under_review", label: "Under Review", color: getApplicationStatusStyles("under_review") },
+  { value: "shortlisted", label: "Shortlisted", color: getApplicationStatusStyles("shortlisted") },
+  { value: "qualified", label: "Qualified", color: getApplicationStatusStyles("qualified") },
+  { value: "interviewed", label: "Interviewed", color: getApplicationStatusStyles("interviewed") },
+  { value: "withdrawn", label: "Withdrawn", color: getApplicationStatusStyles("withdrawn") },
+  { value: "hired", label: "You're Hired", color: getApplicationStatusStyles("hired") },
+  { value: "rejected", label: "Rejected", color: getApplicationStatusStyles("rejected") },
 ];
 
 function normalizeApplicationStatus(value: string): string {

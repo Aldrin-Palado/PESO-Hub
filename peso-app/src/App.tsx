@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import About from "./pages/About";
-import Contact from "./pages/Contact";
+import Contact from "./pages/ContactUs";
 import Employers from "./pages/Employers";
 import Home from "./pages/Home";
 import JobVacancies from "./pages/JobVacancies";

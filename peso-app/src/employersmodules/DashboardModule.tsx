@@ -1,6 +1,7 @@
 
 import type { ReactNode } from "react";
 import AppIcon, { type AppIconName } from "../components/AppIcon";
+import { getApplicationStatusStyles } from "../utils/applicationStatusStyles";
 
 interface EmployerProfile {
   name?: string | null;
@@ -58,7 +59,13 @@ function StatCard({
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({
+  status,
+  isApplication = false,
+}: {
+  status: string;
+  isApplication?: boolean;
+}) {
   const normalized = status.toLowerCase();
 
   const styles: Record<string, string> = {
@@ -76,7 +83,9 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
-        styles[normalized] ?? "bg-slate-100 text-slate-700"
+        isApplication
+          ? getApplicationStatusStyles(status)
+          : styles[normalized] ?? "bg-slate-100 text-slate-700"
       }`}
     >
       {status || "Unknown"}
@@ -155,7 +164,7 @@ function RecentApplications({
               </td>
 
               <td className="px-6 py-4">
-                <StatusBadge status={application.status} />
+                <StatusBadge status={application.status} isApplication />
               </td>
             </tr>
           ))}
