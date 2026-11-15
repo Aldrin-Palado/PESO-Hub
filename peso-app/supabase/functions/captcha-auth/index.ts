@@ -1,4 +1,4 @@
-type RecaptchaVerification = {
+type CaptchaVerification = {
   success: boolean;
   hostname?: string;
   "error-codes"?: string[];
@@ -61,20 +61,20 @@ function jsonResponse(
   });
 }
 
-async function verifyRecaptcha(
+async function verifyCaptchaToken(
   token: string,
 ): Promise<{ valid: true } | { valid: false; error: string }> {
-  const secret = Deno.env.get("RECAPTCHA_SECRET_KEY");
-  if (!secret || allowedHostnames.length === 0) {
+  const secret = Deno.env.get("TURNSTILE_SECRET_KEY") ?? Deno.env.get("RECAPTCHA_SECRET_KEY");
+  if (!secret) {
     console.error("CAPTCHA authentication is missing server configuration.");
     throw new Error(
-      "CAPTCHA verification is not configured. Set RECAPTCHA_SECRET_KEY and RECAPTCHA_ALLOWED_HOSTNAMES in Supabase Function Secrets.",
+      "CAPTCHA verification is not configured. Set TURNSTILE_SECRET_KEY (or the legacy RECAPTCHA_SECRET_KEY) in Supabase Function Secrets.",
     );
   }
 
   const body = new URLSearchParams({ secret, response: token });
   const response = await fetch(
-    "https://www.google.com/recaptcha/api/siteverify",
+    "https://challenges.cloudflare.com/turnstile/v0/siteverify",
     {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -83,22 +83,22 @@ async function verifyRecaptcha(
     },
   );
   if (!response.ok) {
-    console.error("Google reCAPTCHA verification request failed.");
+    console.error("Cloudflare Turnstile verification request failed.");
     throw new Error("Unable to verify the CAPTCHA. Please try again.");
   }
 
-  const result = await response.json() as RecaptchaVerification;
+  const result = await response.json() as CaptchaVerification;
   if (result.success !== true) {
     const errorCodes = Array.isArray(result["error-codes"])
       ? result["error-codes"].filter((code) => typeof code === "string")
       : [];
-    console.warn("Google reCAPTCHA rejected the login token:", errorCodes);
+    console.warn("Cloudflare Turnstile rejected the login token:", errorCodes);
 
     if (errorCodes.includes("invalid-input-secret")) {
       return {
         valid: false,
         error:
-          "Google rejected the reCAPTCHA secret. Check that RECAPTCHA_SECRET_KEY is the secret paired with the configured v2 checkbox site key.",
+          "Cloudflare rejected the Turnstile secret. Check that TURNSTILE_SECRET_KEY is set correctly.",
       };
     }
     if (
@@ -113,23 +113,10 @@ async function verifyRecaptcha(
     return {
       valid: false,
       error:
-        "Google rejected the CAPTCHA response. Check that the v2 checkbox site key and Supabase secret belong to the same reCAPTCHA registration.",
+        "Cloudflare rejected the CAPTCHA response. Please try again.",
     };
   }
 
-  if (typeof result.hostname !== "string") {
-    return {
-      valid: false,
-      error: "Google did not return a hostname for the CAPTCHA response.",
-    };
-  }
-  if (!allowedHostnames.includes(result.hostname.toLowerCase())) {
-    console.warn("Google reCAPTCHA hostname is not allowlisted:", result.hostname);
-    return {
-      valid: false,
-      error: `CAPTCHA hostname mismatch: Google verified "${result.hostname}". Add that exact hostname to RECAPTCHA_ALLOWED_HOSTNAMES and the allowed domains in Google reCAPTCHA settings.`,
-    };
-  }
   return { valid: true };
 }
 
@@ -204,7 +191,7 @@ Deno.serve(async (request: Request) => {
   }
 
   try {
-    const captchaResult = await verifyRecaptcha(captchaToken);
+    const captchaResult = await verifyCaptchaToken(captchaToken);
     if (!captchaResult.valid) {
       return respond({ error: captchaResult.error }, 400);
     }

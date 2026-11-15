@@ -1,23 +1,24 @@
+
 import { useEffect, useRef, useState } from "react";
 
-type RecaptchaRenderOptions = {
-  sitekey: string;
-  theme: "light" | "dark";
-  size: "normal" | "compact";
-  callback: (token: string) => void;
-  "expired-callback": () => void;
-  "error-callback": () => void;
-};
-
-type RecaptchaApi = {
+type TurnstileApi = {
   ready: (callback: () => void) => void;
-  render: (container: HTMLElement, options: RecaptchaRenderOptions) => number;
-  reset: (widgetId?: number) => void;
+  render: (
+    container: HTMLElement,
+    options: {
+      sitekey: string;
+      theme?: "light" | "dark" | "auto";
+      callback: (token: string) => void;
+      "expired-callback"?: () => void;
+      "error-callback"?: () => void;
+    }
+  ) => string;
+  reset: (widgetId?: string) => void;
 };
 
 declare global {
   interface Window {
-    grecaptcha?: RecaptchaApi;
+    turnstile?: TurnstileApi;
   }
 }
 
@@ -32,155 +33,148 @@ type CaptchaProps = {
   className?: string;
 };
 
-const RECAPTCHA_SCRIPT_URL =
-  "https://www.google.com/recaptcha/api.js?render=explicit";
+let turnstilePromise: Promise<TurnstileApi> | undefined;
 
-let scriptPromise: Promise<RecaptchaApi> | undefined;
+function loadTurnstile(): Promise<TurnstileApi> {
+  if (turnstilePromise) return turnstilePromise;
 
-function loadRecaptcha(): Promise<RecaptchaApi> {
-  if (scriptPromise) return scriptPromise;
+  turnstilePromise = new Promise<TurnstileApi>((resolve, reject) => {
+    const finish = () => {
+      const api = window.turnstile;
 
-  scriptPromise = new Promise<RecaptchaApi>((resolve, reject) => {
-    let script = document.querySelector<HTMLScriptElement>(
-      `script[src^="${RECAPTCHA_SCRIPT_URL}"]`,
-    );
-    const isNewScript = !script;
-
-    if (!script) {
-      script = document.createElement("script");
-      script.src = RECAPTCHA_SCRIPT_URL;
-      script.async = true;
-      script.defer = true;
-    }
-
-    const currentScript = script;
-    let settled = false;
-    const cleanupListeners = () => {
-      currentScript.removeEventListener("load", handleLoad);
-      currentScript.removeEventListener("error", handleError);
-    };
-    const rejectLoad = (error: Error) => {
-      if (settled) return;
-      settled = true;
-      cleanupListeners();
-      scriptPromise = undefined;
-      reject(error);
-    };
-    const resolveWhenReady = () => {
-      if (settled) return;
-      const recaptcha = window.grecaptcha;
-      if (!recaptcha || typeof recaptcha.ready !== "function") {
-        rejectLoad(new Error("Google reCAPTCHA loaded without its ready API."));
+      if (!api) {
+        reject(new Error("Cloudflare Turnstile API unavailable."));
         return;
       }
 
-      recaptcha.ready(() => {
-        if (settled) return;
-        const readyRecaptcha = window.grecaptcha;
-        if (
-          readyRecaptcha &&
-          typeof readyRecaptcha.render === "function" &&
-          typeof readyRecaptcha.reset === "function"
-        ) {
-          settled = true;
-          cleanupListeners();
-          resolve(readyRecaptcha);
-          return;
-        }
-        rejectLoad(
-          new Error("Google reCAPTCHA is ready without the checkbox API."),
-        );
-      });
-    };
-    const handleLoad = () => {
-      resolveWhenReady();
-    };
-    const handleError = () => {
-      rejectLoad(new Error("Unable to load Google reCAPTCHA."));
+      api.ready(() => resolve(api));
     };
 
-    currentScript.addEventListener("load", handleLoad, { once: true });
-    currentScript.addEventListener("error", handleError, { once: true });
-
-    if (window.grecaptcha && typeof window.grecaptcha.ready === "function") {
-      resolveWhenReady();
-    } else if (isNewScript) {
-      document.head.appendChild(currentScript);
-    } else if (currentScript.readyState === "complete") {
-      handleLoad();
+    if (window.turnstile) {
+      finish();
+      return;
     }
+
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[data-peso-turnstile="true"]'
+    );
+
+    if (existing) {
+      existing.addEventListener("load", finish, { once: true });
+      existing.addEventListener(
+        "error",
+        () => reject(new Error("CAPTCHA script failed.")),
+        { once: true }
+      );
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    script.async = true;
+    script.defer = true;
+    script.dataset.pesoTurnstile = "true";
+
+    script.onload = finish;
+    script.onerror = () =>
+      reject(new Error("Unable to load Cloudflare Turnstile."));
+
+    document.head.appendChild(script);
+  }).catch((error) => {
+    turnstilePromise = undefined;
+    throw error;
   });
 
-  return scriptPromise;
+  return turnstilePromise;
 }
 
 export default function Captcha({
   onVerify,
   onExpire,
   onError,
-  siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY,
+  siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? import.meta.env.VITE_RECAPTCHA_SITE_KEY,
   theme = "light",
   size = "normal",
   resetKey = 0,
   className = "",
 }: CaptchaProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const widgetIdRef = useRef<number | null>(null);
-  const previousResetKeyRef = useRef(resetKey);
-  const callbacksRef = useRef({ onVerify, onExpire, onError });
-  const [loadError, setLoadError] = useState("");
+  const widgetIdRef = useRef<string | null>(null);
+  const callbacksRef = useRef({
+    onVerify,
+    onExpire,
+    onError,
+  });
+
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    callbacksRef.current = { onVerify, onExpire, onError };
+    callbacksRef.current = {
+      onVerify,
+      onExpire,
+      onError,
+    };
   }, [onVerify, onExpire, onError]);
 
   useEffect(() => {
     if (!siteKey) {
-      setLoadError(
-        "CAPTCHA is not configured. Set VITE_RECAPTCHA_SITE_KEY to enable it.",
-      );
+      setError("Cloudflare Turnstile Site Key is missing.");
       callbacksRef.current.onVerify("");
-      callbacksRef.current.onError?.();
       return;
     }
 
     let active = true;
-    setLoadError("");
+    const container = containerRef.current;
+
+    if (!container) return;
+
+    setError("");
     callbacksRef.current.onVerify("");
 
-    void loadRecaptcha()
-      .then((recaptcha) => {
-        if (!active || !containerRef.current) return;
+    loadTurnstile()
+      .then((api) => {
+        if (!active) return;
 
-        widgetIdRef.current = recaptcha.render(containerRef.current, {
+        container.replaceChildren();
+
+        const widgetId = api.render(container, {
           sitekey: siteKey,
           theme,
-          size,
-          callback: (token) => callbacksRef.current.onVerify(token),
+          callback: (token) => {
+            if (!active) return;
+            callbacksRef.current.onVerify(token);
+          },
+
           "expired-callback": () => {
+            if (!active) return;
+
             callbacksRef.current.onVerify("");
             callbacksRef.current.onExpire?.();
+
             if (widgetIdRef.current !== null) {
-              recaptcha.reset(widgetIdRef.current);
+              api.reset(widgetIdRef.current);
             }
           },
+
           "error-callback": () => {
+            if (!active) return;
+
             callbacksRef.current.onVerify("");
             callbacksRef.current.onError?.();
+
             if (widgetIdRef.current !== null) {
-              recaptcha.reset(widgetIdRef.current);
+              api.reset(widgetIdRef.current);
             }
           },
         });
+
+        widgetIdRef.current = widgetId;
       })
-      .catch((error: unknown) => {
+      .catch((err) => {
         if (!active) return;
-        console.error("Google reCAPTCHA error:", error);
-        setLoadError(
-          error instanceof Error
-            ? error.message
-            : "Unable to load the CAPTCHA challenge.",
-        );
+
+        console.error("CAPTCHA error:", err);
+        setError("Unable to load CAPTCHA. Please refresh.");
         callbacksRef.current.onVerify("");
         callbacksRef.current.onError?.();
       });
@@ -188,24 +182,25 @@ export default function Captcha({
     return () => {
       active = false;
       widgetIdRef.current = null;
+      container.replaceChildren();
     };
   }, [siteKey, theme, size]);
 
   useEffect(() => {
-    if (previousResetKeyRef.current === resetKey) return;
-    previousResetKeyRef.current = resetKey;
+    if (widgetIdRef.current === null) return;
+
     callbacksRef.current.onVerify("");
-    if (widgetIdRef.current !== null && window.grecaptcha) {
-      window.grecaptcha.reset(widgetIdRef.current);
-    }
+
+    window.turnstile?.reset(widgetIdRef.current);
   }, [resetKey]);
 
   return (
     <div className={className}>
       <div ref={containerRef} />
-      {loadError && (
-        <p className="mt-2 text-sm text-red-700" role="alert">
-          {loadError}
+
+      {error && (
+        <p role="alert" className="mt-2 text-sm text-red-700">
+          {error}
         </p>
       )}
     </div>

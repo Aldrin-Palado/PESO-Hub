@@ -1,7 +1,8 @@
 {
   "python.terminal.useEnvFile": true,
   "deno.enablePaths": [
-    "supabase/functions"
+    "supabase/functions",
+    "peso-app/supabase/functions"
   ],
   "deno.lint": true,
   "deno.unstable": [

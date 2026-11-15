@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import AuthSideImage from "./AuthSideImage";
 import PesoLogo from "./PesoLogo";
@@ -20,21 +20,34 @@ function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [authStep, setAuthStep] = useState<"credentials" | "captcha">(
+    "credentials",
+  );
+  const [authMethod, setAuthMethod] = useState<"password" | "google">(
+    "password",
+  );
   const [captchaToken, setCaptchaToken] = useState("");
   const [captchaResetKey, setCaptchaResetKey] = useState(0);
   const [oauthLoading, setOauthLoading] = useState(false);
   const [oauthError, setOauthError] = useState("");
+  const authInProgressRef = useRef(false);
+  const lastSubmittedCaptchaTokenRef = useRef("");
 
   const resetCaptcha = () => {
+    lastSubmittedCaptchaTokenRef.current = "";
     setCaptchaToken("");
     setCaptchaResetKey((current) => current + 1);
   };
 
   const signInWithGoogle = async () => {
-    if (loading || oauthLoading) return;
+    if (authInProgressRef.current || loading || oauthLoading) return;
     if (!captchaToken) {
       return;
     }
+    if (lastSubmittedCaptchaTokenRef.current === captchaToken) return;
+    authInProgressRef.current = true;
+    lastSubmittedCaptchaTokenRef.current = captchaToken;
+    setCaptchaToken("");
     setOauthError("");
     setOauthLoading(true);
     try {
@@ -55,8 +68,10 @@ function Login() {
       setOauthError(
         error instanceof Error ? error.message : "Unable to sign in with Google.",
       );
+    } finally {
       resetCaptcha();
       setOauthLoading(false);
+      authInProgressRef.current = false;
     }
   };
 
@@ -201,10 +216,21 @@ function Login() {
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (loading) return;
+    if (authInProgressRef.current || loading) return;
+    if (authStep === "credentials") {
+      setAuthMethod("password");
+      setOauthError("");
+      setAuthStep("captcha");
+      return;
+    }
+    if (authMethod !== "password") return;
     if (!captchaToken) {
       return;
     }
+    if (lastSubmittedCaptchaTokenRef.current === captchaToken) return;
+    authInProgressRef.current = true;
+    lastSubmittedCaptchaTokenRef.current = captchaToken;
+    setCaptchaToken("");
     setLoading(true);
 
     try {
@@ -272,6 +298,7 @@ function Login() {
     } finally {
       resetCaptcha();
       setLoading(false);
+      authInProgressRef.current = false;
     }
   };
 
@@ -291,10 +318,12 @@ function Login() {
 
             <div className="mb-8">
               <h2 className="mt-2 text-3xl font-semibold tracking-tight text-[#102A4C] sm:text-4xl">
-                Sign in
+                {authStep === "credentials" ? "Sign in" : "Verify you're human"}
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-500 sm:text-base">
-                Access your PESO MABINI account to continue.
+                {authStep === "credentials"
+                  ? "Access your PESO MABINI account to continue."
+                  : "Complete the CAPTCHA below before continuing to sign in."}
               </p>
             </div>
 
@@ -309,112 +338,173 @@ function Login() {
             )}
 
             <form onSubmit={handleLogin} className="space-y-5">
-              <div>
-                <label
-                  htmlFor="login-email"
-                  className="mb-2 block text-sm font-medium text-slate-800"
-                >
-                  Email address
-                </label>
-                <input
-                  id="login-email"
-                  type="email"
-                  autoComplete="username"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="Enter your email"
-                  required
-                  disabled={loading}
-                  className="w-full rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#315FEA] focus:ring-4 focus:ring-[#315FEA]/10 disabled:bg-slate-100"
-                />
-              </div>
+              {authStep === "credentials" ? (
+                <>
+                  <div>
+                    <label
+                      htmlFor="login-email"
+                      className="mb-2 block text-sm font-medium text-slate-800"
+                    >
+                      Email address
+                    </label>
+                    <input
+                      id="login-email"
+                      type="email"
+                      autoComplete="username"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      placeholder="Enter your email"
+                      required
+                      disabled={loading}
+                      className="w-full rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#315FEA] focus:ring-4 focus:ring-[#315FEA]/10 disabled:bg-slate-100"
+                    />
+                  </div>
 
-              <div>
-                <label
-                  htmlFor="login-password"
-                  className="mb-2 block text-sm font-medium text-slate-800"
-                >
-                  Password
-                </label>
+                  <div>
+                    <label
+                      htmlFor="login-password"
+                      className="mb-2 block text-sm font-medium text-slate-800"
+                    >
+                      Password
+                    </label>
 
-                <div className="relative">
-                  <input
-                    id="login-password"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="Enter your password"
-                    required
-                    disabled={loading}
-                    className="w-full rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 pr-20 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#315FEA] focus:ring-4 focus:ring-[#315FEA]/10 disabled:bg-slate-100"
-                  />
+                    <div className="relative">
+                      <input
+                        id="login-password"
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        placeholder="Enter your password"
+                        required
+                        disabled={loading}
+                        className="w-full rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 pr-20 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#315FEA] focus:ring-4 focus:ring-[#315FEA]/10 disabled:bg-slate-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((current) => !current)}
+                        disabled={loading}
+                        className="absolute right-5 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500 transition hover:text-[#315FEA]"
+                      >
+                        {showPassword ? "Hide" : "Show"}
+                      </button>
+                    </div>
+
+                    <div className="mt-2 text-right">
+                      <Link
+                        to="/forgot-password"
+                        className="text-sm font-medium text-[#315FEA] transition hover:text-[#123B70]"
+                      >
+                        Forgot Password?
+                      </Link>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="remember"
+                      className="h-4 w-4 rounded border-slate-300 accent-[#315FEA] focus:ring-[#315FEA]"
+                    />
+                    <label htmlFor="remember" className="text-sm text-slate-600">
+                      Keep me signed in
+                    </label>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading || oauthLoading}
+                    className="w-full rounded-2xl bg-[#315FEA] px-5 py-4 text-base font-semibold text-white shadow-[0_12px_24px_-12px_rgba(49,95,234,0.75)] transition hover:bg-[#244FD4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Continue
+                  </button>
+
+                  {oauthError && (
+                    <p role="alert" className="text-sm text-red-700">
+                      {oauthError}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <span className="h-px flex-1 bg-slate-200" />
+                    Or
+                    <span className="h-px flex-1 bg-slate-200" />
+                  </div>
+
                   <button
                     type="button"
-                    onClick={() => setShowPassword((current) => !current)}
-                    disabled={loading}
-                    className="absolute right-5 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500 transition hover:text-[#315FEA]"
+                    onClick={() => {
+                      setAuthMethod("google");
+                      setOauthError("");
+                      setAuthStep("captcha");
+                    }}
+                    disabled={loading || oauthLoading}
+                    className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 text-base font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
                   >
-                    {showPassword ? "Hide" : "Show"}
+                    <img
+                      src={googleLogo}
+                      alt=""
+                      aria-hidden="true"
+                      className="h-9 w-9 object-contain"
+                    />
+                    Continue with Google
                   </button>
-                </div>
+                </>
+              ) : (
+                <>
+                  <Captcha
+                    onVerify={setCaptchaToken}
+                    onExpire={() => setCaptchaToken("")}
+                    onError={() => setCaptchaToken("")}
+                    resetKey={captchaResetKey}
+                    className="flex justify-center"
+                  />
 
-                <div className="mt-2 text-right">
-                  <Link
-                    to="/forgot-password"
-                    className="text-sm font-medium text-[#315FEA] transition hover:text-[#123B70]"
+                  {oauthError && (
+                    <p role="alert" className="text-sm text-red-700">
+                      {oauthError}
+                    </p>
+                  )}
+
+                  {authMethod === "password" ? (
+                    <button
+                      type="submit"
+                      disabled={loading || oauthLoading || !captchaToken}
+                      className="w-full rounded-2xl bg-[#315FEA] px-5 py-4 text-base font-semibold text-white shadow-[0_12px_24px_-12px_rgba(49,95,234,0.75)] transition hover:bg-[#244FD4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {loading ? "Signing In..." : "Sign In"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void signInWithGoogle()}
+                      disabled={loading || oauthLoading || !captchaToken}
+                      className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 text-base font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      <img
+                        src={googleLogo}
+                        alt=""
+                        aria-hidden="true"
+                        className="h-9 w-9 object-contain"
+                      />
+                      {oauthLoading ? "Opening Google..." : "Continue with Google"}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetCaptcha();
+                      setAuthMethod("password");
+                      setOauthError("");
+                      setAuthStep("credentials");
+                    }}
+                    disabled={loading || oauthLoading}
+                    className="w-full rounded-2xl border border-[#D5DEEB] bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Forgot Password?
-                  </Link>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="remember"
-                  className="h-4 w-4 rounded border-slate-300 accent-[#315FEA] focus:ring-[#315FEA]"
-                />
-                <label htmlFor="remember" className="text-sm text-slate-600">
-                  Keep me signed in
-                </label>
-              </div>
-
-              <Captcha
-                onVerify={setCaptchaToken}
-                onExpire={() => setCaptchaToken("")}
-                onError={() => setCaptchaToken("")}
-                resetKey={captchaResetKey}
-                className="flex justify-center"
-              />
-
-              <button
-                type="submit"
-                disabled={loading || oauthLoading || !captchaToken}
-                className="w-full rounded-2xl bg-[#315FEA] px-5 py-4 text-base font-semibold text-white shadow-[0_12px_24px_-12px_rgba(49,95,234,0.75)] transition hover:bg-[#244FD4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loading ? "Signing In..." : "Sign In"}
-              </button>
-
-              {oauthError && (
-                <p role="alert" className="text-sm text-red-700">{oauthError}</p>
+                    Back
+                  </button>
+                </>
               )}
-              <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                <span className="h-px flex-1 bg-slate-200" />
-                Or
-                <span className="h-px flex-1 bg-slate-200" />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => void signInWithGoogle()}
-                disabled={loading || oauthLoading || !captchaToken}
-                className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 text-base font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
-              >
-                <img src={googleLogo} alt="" aria-hidden="true" className="h-9 w-9 object-contain" />
-                {oauthLoading ? "Opening Google..." : "Continue with Google"}
-              </button>
-
             </form>
 
             <div className="mt-8 pt-2 text-center">

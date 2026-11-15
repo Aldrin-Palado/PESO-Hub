@@ -10,6 +10,9 @@ verify_jwt = false
 [functions.audit-metadata]
 verify_jwt = true
 
+[functions.captcha-auth]
+verify_jwt = false
+
 [api]
 enabled = true
 # Port to use for the API URL.

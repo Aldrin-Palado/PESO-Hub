@@ -12,33 +12,29 @@
 
 ## Login CAPTCHA
 
-The login form uses the Google reCAPTCHA v2 Checkbox. Set the public site key in
-the frontend environment before building:
+The login form uses Cloudflare Turnstile, which is the previous CAPTCHA used by
+this project. Set the public site key in the frontend environment before building:
 
 ```env
-VITE_RECAPTCHA_SITE_KEY=<Google reCAPTCHA v2 site key>
+VITE_TURNSTILE_SITE_KEY=<Cloudflare Turnstile site key>
 ```
 
-Configure these secrets in the Supabase project. `RECAPTCHA_ALLOWED_HOSTNAMES` is
-a comma-separated list of exact hostnames registered for the reCAPTCHA site key;
-include `peso-mabini-copy.vercel.app` for the deployed site and the local development
-hostname if testing locally.
+Configure these secrets in the Supabase project. The backend verifies each token
+against Cloudflare before requesting a Supabase password session.
 
-- `RECAPTCHA_SECRET_KEY` (keep this server-side; never use a `VITE_` variable)
-- `RECAPTCHA_ALLOWED_HOSTNAMES` (for example, `peso.example.gov,localhost`)
+- `TURNSTILE_SECRET_KEY` (keep this server-side; never use a `VITE_` variable)
 
-Deploy the backend verifier after setting the secrets:
+Deploy the backend verifier after setting the secret:
 
 ```sh
-supabase secrets set RECAPTCHA_SECRET_KEY=<secret> RECAPTCHA_ALLOWED_HOSTNAMES=<hostnames>
+supabase secrets set TURNSTILE_SECRET_KEY=<secret>
 supabase functions deploy captcha-auth
 ```
 
-The function verifies tokens with Google before requesting a Supabase password
-session. Google reCAPTCHA v2 is not a native Supabase Auth CAPTCHA provider, so
+The function verifies tokens with Cloudflare before requesting a Supabase password
+session. Cloudflare Turnstile is not a native Supabase Auth CAPTCHA provider, so
 direct calls to Supabase's public password-grant endpoint do not pass through this
-function. Use Supabase's native hCaptcha or Turnstile integration if CAPTCHA must
-also be enforced for direct Auth API calls.
+function.
 
 ## Admin/staff audit logs
 
