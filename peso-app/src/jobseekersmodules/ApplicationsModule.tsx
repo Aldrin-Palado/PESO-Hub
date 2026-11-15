@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../services/supabase";
 import { openStoredResume } from "../services/resumes";
+import { getApplicationStatusStyles } from "../utils/applicationStatusStyles";
 
 type Seeker = {
   job_seeker_id: string;
@@ -52,24 +53,14 @@ function StatusBadge({
   status: string;
 }) {
   const normalizedStatus = status.toLowerCase();
-  const styles =
-    normalizedStatus === "pending"
-      ? "bg-yellow-50 text-yellow-700"
-      : normalizedStatus === "under_review" ||
-          normalizedStatus === "interviewed"
-        ? "bg-blue-50 text-blue-700"
-        : normalizedStatus === "hired"
-          ? "bg-green-50 text-green-700"
-          : normalizedStatus === "rejected"
-            ? "bg-red-50 text-red-700"
-            : "bg-gray-100 text-gray-700";
+  const styles = getApplicationStatusStyles(normalizedStatus);
 
   const label =
     normalizedStatus === "hired"
       ? "You're Hired"
       : normalizedStatus === "interviewed"
         ? "Interviewed"
-        : status.replace(/_/g, " ");
+        : normalizedStatus.replace(/_/g, " ");
 
   return (
     <span
