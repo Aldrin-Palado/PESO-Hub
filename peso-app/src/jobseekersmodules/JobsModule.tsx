@@ -698,8 +698,8 @@ export default function JobsModule({
           </div>
 
         ) : (
-
-          filteredJobs.map((job) => {
+          <div className="grid gap-4 md:grid-cols-2">
+            {filteredJobs.map((job) => {
 
             const isSaved = savedJobs.includes(job.id);
             const postedDate = job.datePosted
@@ -825,7 +825,8 @@ export default function JobsModule({
                 </div>
               </div>
             );
-          })
+            })}
+          </div>
         )}
 
       </div>
