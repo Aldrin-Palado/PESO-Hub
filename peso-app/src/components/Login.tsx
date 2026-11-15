@@ -328,12 +328,6 @@ function Login() {
                 </label>
               </div>
 
-              <Captcha
-                onVerify={setCaptchaToken}
-                resetKey={captchaResetKey}
-                className="flex justify-center"
-              />
-
               <button
                 type="submit"
                 disabled={loading || oauthLoading || !captchaToken}
@@ -341,6 +335,12 @@ function Login() {
               >
                 {loading ? "Signing In..." : "Sign In"}
               </button>
+
+              <Captcha
+                onVerify={setCaptchaToken}
+                resetKey={captchaResetKey}
+                className="flex justify-center"
+              />
 
               {oauthError && (
                 <p role="alert" className="text-sm text-red-700">{oauthError}</p>
