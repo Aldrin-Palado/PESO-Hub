@@ -130,6 +130,7 @@ type ScreeningField = {
   type?: "text" | "number" | "date" | "textarea" | "select" | "checkboxes" | "checkbox";
   options?: string[];
   required?: boolean;
+  hint?: string;
 };
 
 const screeningSections: {
@@ -176,7 +177,12 @@ const screeningSections: {
     title: "II. Job Preference",
     fields: [
       { key: "preferredOccupation", label: "Preferred Occupation", required: true },
-      { key: "companyApplyingFor", label: "Company Applying For", required: true },
+      {
+        key: "companyApplyingFor",
+        label: "Company Applying For",
+        required: true,
+        hint: "Put N/A if undecided",
+      },
       { key: "preferredWorkLocation", label: "Preferred Work Location", type: "select", options: ["Mabini", "Batangas Province", "Anywhere in the Philippines", "Other"], required: true },
       { key: "otherWorkLocation", label: "Other Preferred Work Location" },
     ],
@@ -202,9 +208,9 @@ const screeningSections: {
   {
     title: "V. Technical / Vocational and Other Training",
     fields: [
-      { key: "training1", label: "Training / Course 1", type: "textarea", required: true },
-      { key: "training2", label: "Training / Course 2", type: "textarea", required: true },
-      { key: "training3", label: "Training / Course 3", type: "textarea", required: true },
+      { key: "training1", label: "Training / Course 1", type: "textarea", required: true, hint: "Put N/A if none" },
+      { key: "training2", label: "Training / Course 2", type: "textarea", required: true, hint: "Put N/A if none" },
+      { key: "training3", label: "Training / Course 3", type: "textarea", required: true, hint: "Put N/A if none" },
     ],
   },
   {
@@ -1112,6 +1118,11 @@ export default function JobSeekerDashboard() {
                             <div className="block text-xs font-bold uppercase tracking-wide text-slate-500">
                               {field.label}
                               {field.required && <span className="text-red-600"> *</span>}
+                              {field.hint && (
+                                <span className="mt-1 block text-xs font-normal normal-case tracking-normal text-slate-500">
+                                  {field.hint}
+                                </span>
+                              )}
                               {typeof rawValue === "string" &&
                                 rawValue.length > 0 &&
                                 !rawValue.startsWith("data:image/") && (
@@ -1234,6 +1245,11 @@ export default function JobSeekerDashboard() {
                             <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
                               {field.label}
                             </p>
+                            {field.hint && (
+                              <p className="mt-1 text-xs text-slate-500">
+                                {field.hint}
+                              </p>
+                            )}
                             {field.key === "signature" &&
                             typeof rawValue === "string" &&
                             rawValue.startsWith("data:image/") ? (
