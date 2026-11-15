@@ -4,6 +4,7 @@ import AuthSideImage from "./AuthSideImage";
 import PesoLogo from "./PesoLogo";
 import { supabase } from "../services/supabase";
 import AppIcon from "./AppIcon";
+import Captcha from "./Captcha";
 
 const googleLogo = new URL("../assets/images/google.png", import.meta.url).href;
 
@@ -19,6 +20,8 @@ function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
   const [oauthLoading, setOauthLoading] = useState(false);
   const [oauthError, setOauthError] = useState("");
 
@@ -177,6 +180,7 @@ function Login() {
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (loading) return;
+    if (!captchaToken) return;
     setLoading(true);
 
     try {
@@ -186,6 +190,7 @@ function Login() {
       } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
+        options: { captchaToken },
       });
 
       if (loginError) {
@@ -212,6 +217,8 @@ function Login() {
       alert(message);
       navigate("/", { replace: true });
     } finally {
+      setCaptchaToken("");
+      setCaptchaResetKey((current) => current + 1);
       setLoading(false);
     }
   };
@@ -323,11 +330,17 @@ function Login() {
 
               <button
                 type="submit"
-                disabled={loading || oauthLoading}
+                disabled={loading || oauthLoading || !captchaToken}
                 className="w-full rounded-2xl bg-[#315FEA] px-5 py-4 text-base font-semibold text-white shadow-[0_12px_24px_-12px_rgba(49,95,234,0.75)] transition hover:bg-[#244FD4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? "Signing In..." : "Sign In"}
               </button>
+
+              <Captcha
+                onVerify={setCaptchaToken}
+                resetKey={captchaResetKey}
+                className="flex justify-center"
+              />
 
               {oauthError && (
                 <p role="alert" className="text-sm text-red-700">{oauthError}</p>
