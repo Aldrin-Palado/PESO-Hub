@@ -12,7 +12,7 @@ type TurnstileApi = {
       size?: "normal" | "compact";
       callback: (token: string) => void;
       "expired-callback"?: () => void;
-      "error-callback"?: () => void;
+      "error-callback"?: (errorCode?: string) => void;
     }
   ) => string;
 
@@ -215,6 +215,21 @@ export default function Captcha({
 
   // Load and render CAPTCHA.
   useEffect(() => {
+<<<<<<< HEAD
+=======
+    if (!siteKey) {
+      setError("Cloudflare Turnstile site key is missing. Set VITE_TURNSTILE_SITE_KEY in Vercel.");
+      callbacksRef.current.onVerify("");
+      return;
+    }
+    if (/^[a-f\d]{32,}$/i.test(siteKey)) {
+      setError("The configured value looks like a secret key. Use the public Turnstile site key for VITE_TURNSTILE_SITE_KEY.");
+      callbacksRef.current.onVerify("");
+      return;
+    }
+
+    let active = true;
+>>>>>>> f32c2bd6b441a177a9756b5df6ef02b6d686640c
     const container = containerRef.current;
 
     if (!container) return;
@@ -262,16 +277,25 @@ export default function Captcha({
             callbacksRef.current.onExpire?.();
           },
 
-          "error-callback": () => {
+          "error-callback": (errorCode) => {
             if (!active) return;
 
             callbacksRef.current.onVerify("");
+<<<<<<< HEAD
 
             setError(
               "CAPTCHA verification failed. Please try again."
             );
 
             callbacksRef.current.onError?.();
+=======
+            callbacksRef.current.onError?.();
+            setError(
+              errorCode
+                ? `Cloudflare Turnstile could not load (error ${errorCode}). Check that the public site key is correct and this domain is allowed in the Turnstile widget.`
+                : "Cloudflare Turnstile could not load. Check the public site key and allowed domains in the Turnstile widget.",
+            );
+>>>>>>> f32c2bd6b441a177a9756b5df6ef02b6d686640c
           },
         });
 
