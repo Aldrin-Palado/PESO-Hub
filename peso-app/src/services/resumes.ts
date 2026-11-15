@@ -18,6 +18,16 @@ export function getResumeExtension(fileName: string) {
   return fileName.split(".").pop()?.toLowerCase() ?? "";
 }
 
+export function getResumeFileName(resumeValue: string): string {
+  const path = resumeValue
+    .split(/[?#]/, 1)[0]
+    .replace(/\\/g, "/");
+  const storedName = path.split("/").filter(Boolean).pop() ?? "";
+  const timestampedName = storedName.match(/^\d+-(.+)$/);
+
+  return timestampedName?.[1] ?? storedName;
+}
+
 export async function getResumeUrl(resumeValue: string) {
   const trimmed = resumeValue.trim();
 

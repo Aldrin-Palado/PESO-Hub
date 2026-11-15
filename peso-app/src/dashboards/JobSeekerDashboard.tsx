@@ -11,6 +11,7 @@ import {
   RESUME_FORMATS_LABEL,
   RESUME_MIME_TYPES,
   getResumeExtension,
+  getResumeFileName,
 } from "../services/resumes";
 
 import JobSeekerSidebar, {
@@ -50,7 +51,6 @@ type Seeker = {
   birth_date: string | null;
   resume_url: string | null;
   verification_status: "pending" | "verified" | "not_approved";
-  verification_refresh_required: boolean;
   registration_details: unknown;
 };
 
@@ -515,7 +515,6 @@ export default function JobSeekerDashboard() {
             birth_date,
             resume_url,
             verification_status,
-            verification_refresh_required,
             registration_details
           `
         )
@@ -635,11 +634,10 @@ export default function JobSeekerDashboard() {
           birth_date: birthDate || null,
           contact_no: contactNumber || null,
           address: presentAddress || null,
-          verification_details_reviewed_at: new Date().toISOString(),
         })
         .eq("job_seeker_id", seeker.job_seeker_id)
         .select(
-          "registration_details, full_name, birth_date, contact_no, address, verification_status, verification_refresh_required",
+          "registration_details, full_name, birth_date, contact_no, address, verification_status",
         )
         .maybeSingle();
 
@@ -682,7 +680,8 @@ export default function JobSeekerDashboard() {
     setResumeError("");
     setResumeSuccess("");
 
-    const resumePath = `${seeker.user_id}/${Date.now()}.${extension}`;
+    const storedFileName = resumeFile.name.replace(/[\\/]/g, "_").trim();
+    const resumePath = `${seeker.user_id}/${Date.now()}-${storedFileName}`;
 
     try {
       const { error: uploadError } = await supabase.storage
@@ -872,8 +871,16 @@ export default function JobSeekerDashboard() {
             />
 
             <div className="min-w-0">
-              <h2 className="truncate text-xl font-black text-[#123B70] sm:text-2xl">
-                {seeker.full_name || "Job Seeker"}
+              <h2 className="flex min-w-0 items-center gap-2 text-xl font-black text-[#123B70] sm:text-2xl">
+                <span className="truncate">{seeker.full_name || "Job Seeker"}</span>
+                {seeker.verification_status === "verified" && (
+                  <span
+                    title="Verified job seeker"
+                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"
+                  >
+                    <AppIcon name="check" className="h-3.5 w-3.5" />
+                  </span>
+                )}
               </h2>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-[#0759AE]">
@@ -1290,7 +1297,7 @@ export default function JobSeekerDashboard() {
                     <h3 className="text-base font-bold text-[#123B70]">Resume / CV</h3>
                     <p className="mt-1 text-xs text-slate-600">
                       {seeker.resume_url
-                        ? "Resume uploaded. Replace it with your latest version when needed."
+                        ? `Uploaded file: ${getResumeFileName(seeker.resume_url)}`
                         : `Upload your updated resume (${RESUME_FORMATS_LABEL}, up to 5 MB).`}
                     </p>
                   </div>
@@ -1797,30 +1804,7 @@ export default function JobSeekerDashboard() {
               </button>
             </div>
           )}
-          {seeker?.verification_refresh_required && (
-            <div
-              role="alert"
-              className="mx-auto mb-6 flex max-w-7xl flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
-            >
-              <p>
-                Your account was automatically unverified because your screening
-                details need an update. Review and resubmit them so PESO can
-                verify your account again.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  handlePageChange("Profile");
-                  startScreeningEdit();
-                }}
-                className="shrink-0 rounded-lg bg-amber-800 px-3 py-2 font-bold text-white hover:bg-amber-900"
-              >
-                Update screening details
-              </button>
-            </div>
-          )}
           {seeker &&
-            !seeker.verification_refresh_required &&
             seeker.verification_status === "pending" &&
             isJobSeekerProfileComplete(
               seeker.registration_details,

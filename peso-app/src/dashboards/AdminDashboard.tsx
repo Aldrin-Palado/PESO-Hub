@@ -1529,11 +1529,6 @@ export default function AdminDashboard() {
       const seeker = jobSeekers.find(
         (jobSeeker) => jobSeeker.job_seeker_id === jobSeekerId,
       );
-      if (seeker?.verification_refresh_required) {
-        throw new Error(
-          "The job seeker must update and resubmit screening details before being verified again.",
-        );
-      }
       if (
         !seeker ||
         !String(seeker.full_name || "").trim() ||
