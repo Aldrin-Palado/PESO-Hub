@@ -22,11 +22,16 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const [captchaToken, setCaptchaToken] = useState("");
   const [captchaResetKey, setCaptchaResetKey] = useState(0);
+  const [captchaRequested, setCaptchaRequested] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
   const [oauthError, setOauthError] = useState("");
 
   const signInWithGoogle = async () => {
-    if (loading || oauthLoading || !captchaToken) return;
+    if (loading || oauthLoading) return;
+    if (!captchaToken) {
+      setCaptchaRequested(true);
+      return;
+    }
     setOauthError("");
     setOauthLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
@@ -183,7 +188,10 @@ function Login() {
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (loading) return;
-    if (!captchaToken) return;
+    if (!captchaToken) {
+      setCaptchaRequested(true);
+      return;
+    }
     setLoading(true);
 
     try {
@@ -331,23 +339,13 @@ function Login() {
                 </label>
               </div>
 
-              <p className="text-center text-sm text-slate-600">
-                Complete the CAPTCHA below to sign in or continue with Google.
-              </p>
-
               <button
                 type="submit"
-                disabled={loading || oauthLoading || !captchaToken}
+                disabled={loading || oauthLoading}
                 className="w-full rounded-2xl bg-[#315FEA] px-5 py-4 text-base font-semibold text-white shadow-[0_12px_24px_-12px_rgba(49,95,234,0.75)] transition hover:bg-[#244FD4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? "Signing In..." : "Sign In"}
               </button>
-
-              <Captcha
-                onVerify={setCaptchaToken}
-                resetKey={captchaResetKey}
-                className="flex justify-center"
-              />
 
               {oauthError && (
                 <p role="alert" className="text-sm text-red-700">{oauthError}</p>
@@ -360,12 +358,26 @@ function Login() {
               <button
                 type="button"
                 onClick={() => void signInWithGoogle()}
-                disabled={loading || oauthLoading || !captchaToken}
+                disabled={loading || oauthLoading}
                 className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 text-base font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
               >
                 <img src={googleLogo} alt="" aria-hidden="true" className="h-9 w-9 object-contain" />
                 {oauthLoading ? "Opening Google..." : "Continue with Google"}
               </button>
+
+              <p className="text-center text-sm text-slate-600">
+                {captchaRequested
+                  ? "Complete the CAPTCHA, then select your sign-in option."
+                  : "Select a sign-in option to show the CAPTCHA verification."}
+              </p>
+
+              {captchaRequested && (
+                <Captcha
+                  onVerify={setCaptchaToken}
+                  resetKey={captchaResetKey}
+                  className="flex flex-col items-center"
+                />
+              )}
 
             </form>
 

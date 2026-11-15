@@ -7,9 +7,12 @@ type TurnstileRenderOptions = {
   sitekey: string;
   theme: TurnstileTheme;
   size: TurnstileSize;
+  appearance: "always";
+  execution: "execute";
   callback: (token: string) => void;
   "expired-callback": () => void;
   "error-callback": () => void;
+  "timeout-callback": () => void;
 };
 
 type TurnstileApi = {
@@ -17,6 +20,7 @@ type TurnstileApi = {
     container: HTMLElement,
     options: TurnstileRenderOptions,
   ) => string;
+  execute: (widgetId: string) => void;
   remove: (widgetId: string) => void;
 };
 
@@ -101,6 +105,9 @@ export default function Captcha({
   const containerRef = useRef<HTMLDivElement>(null);
   const callbacksRef = useRef({ onVerify, onExpire, onError });
   const [loadError, setLoadError] = useState("");
+  const [widgetId, setWidgetId] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
 
   useEffect(() => {
     callbacksRef.current = { onVerify, onExpire, onError };
@@ -117,27 +124,46 @@ export default function Captcha({
     }
 
     let active = true;
-    let widgetId: string | undefined;
+    let renderedWidgetId: string | undefined;
     setLoadError("");
+    setWidgetId(null);
+    setIsVerifying(false);
+    setIsVerified(false);
+    callbacksRef.current.onVerify("");
 
     void loadTurnstile()
       .then((turnstile) => {
         if (!active || !containerRef.current) return;
 
-        widgetId = turnstile.render(containerRef.current, {
+        renderedWidgetId = turnstile.render(containerRef.current, {
           sitekey: siteKey,
           theme,
           size,
-          callback: (token) => callbacksRef.current.onVerify(token),
+          appearance: "always",
+          execution: "execute",
+          callback: (token) => {
+            setIsVerified(true);
+            setIsVerifying(false);
+            callbacksRef.current.onVerify(token);
+          },
           "expired-callback": () => {
+            setIsVerified(false);
+            setIsVerifying(false);
             callbacksRef.current.onVerify("");
             callbacksRef.current.onExpire?.();
           },
           "error-callback": () => {
+            setIsVerified(false);
+            setIsVerifying(false);
             callbacksRef.current.onVerify("");
             callbacksRef.current.onError?.();
           },
+          "timeout-callback": () => {
+            setIsVerifying(false);
+            callbacksRef.current.onVerify("");
+          },
         });
+        setWidgetId(renderedWidgetId);
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -153,14 +179,43 @@ export default function Captcha({
 
     return () => {
       active = false;
-      if (widgetId && window.turnstile) {
-        window.turnstile.remove(widgetId);
+      if (renderedWidgetId && window.turnstile) {
+        window.turnstile.remove(renderedWidgetId);
       }
     };
   }, [siteKey, theme, size, resetKey]);
 
+  const startVerification = () => {
+    if (!widgetId || !window.turnstile || isVerifying || isVerified) return;
+    setIsVerifying(true);
+    try {
+      window.turnstile.execute(widgetId);
+    } catch (error) {
+      setIsVerifying(false);
+      setLoadError(
+        error instanceof Error
+          ? error.message
+          : "Unable to start CAPTCHA verification.",
+      );
+      callbacksRef.current.onVerify("");
+      callbacksRef.current.onError?.();
+    }
+  };
+
   return (
     <div className={className}>
+      <button
+        type="button"
+        onClick={startVerification}
+        disabled={!widgetId || isVerifying || isVerified || Boolean(loadError)}
+        className="mb-3 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {isVerified
+          ? "CAPTCHA verified"
+          : isVerifying
+            ? "Verifying..."
+            : "I'm not a robot — verify"}
+      </button>
       <div ref={containerRef} />
       {loadError && (
         <p className="mt-2 text-sm text-red-700" role="alert">
