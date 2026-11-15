@@ -87,16 +87,10 @@ export default function JobMatchesModule() {
       if (!isResumeFileTypeValid(resume, bytes)) {
         throw new Error("Choose a valid PDF, DOC, or DOCX resume.");
       }
-      let binary = "";
-      const chunkSize = 0x8000;
-      for (let index = 0; index < bytes.length; index += chunkSize) {
-        binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
-      }
-      const encodedResume = { fileName: resume.name, data: btoa(binary) };
 
       const result = await invokePesoAI<{ matches: JobMatch[]; available_jobs?: PublicJob[]; reason?: string }>(
         "job-matches",
-        { resume: encodedResume },
+        { resume },
       );
       if (!result || !Array.isArray(result.matches)) {
         throw new Error("The AI service returned an invalid matching response. Please try again.");
