@@ -26,6 +26,7 @@ function Login() {
   const [oauthError, setOauthError] = useState("");
 
   const signInWithGoogle = async () => {
+    if (loading || oauthLoading || !captchaToken) return;
     setOauthError("");
     setOauthLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
@@ -34,6 +35,8 @@ function Login() {
     });
     if (error) {
       setOauthError(error.message);
+      setCaptchaToken("");
+      setCaptchaResetKey((current) => current + 1);
       setOauthLoading(false);
     }
   };
@@ -328,6 +331,10 @@ function Login() {
                 </label>
               </div>
 
+              <p className="text-center text-sm text-slate-600">
+                Complete the CAPTCHA below to sign in or continue with Google.
+              </p>
+
               <button
                 type="submit"
                 disabled={loading || oauthLoading || !captchaToken}
@@ -353,7 +360,7 @@ function Login() {
               <button
                 type="button"
                 onClick={() => void signInWithGoogle()}
-                disabled={loading || oauthLoading}
+                disabled={loading || oauthLoading || !captchaToken}
                 className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 text-base font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
               >
                 <img src={googleLogo} alt="" aria-hidden="true" className="h-9 w-9 object-contain" />
