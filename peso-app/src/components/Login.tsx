@@ -372,17 +372,17 @@ function Login() {
   };
 
   // Google OAuth after CAPTCHA verification.
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (verifiedCaptchaToken = captchaToken) => {
     if (authInProgressRef.current || loading || oauthLoading) return;
 
-    if (!captchaToken) {
+    if (!verifiedCaptchaToken) {
       setError("Please complete the CAPTCHA verification.");
       return;
     }
 
-    if (lastSubmittedCaptchaTokenRef.current === captchaToken) return;
+    if (lastSubmittedCaptchaTokenRef.current === verifiedCaptchaToken) return;
 
-    const submittedToken = captchaToken;
+    const submittedToken = verifiedCaptchaToken;
 
     authInProgressRef.current = true;
     lastSubmittedCaptchaTokenRef.current = submittedToken;
@@ -628,7 +628,12 @@ function Login() {
                     <Captcha
                       onVerify={(token) => {
                         setCaptchaToken(token);
-                        if (token) setError("");
+                        if (token) {
+                          setError("");
+                          if (authMethod === "google") {
+                            void signInWithGoogle(token);
+                          }
+                        }
                       }}
                       onExpire={() => {
                         setCaptchaToken("");
