@@ -10,6 +10,7 @@ type RecaptchaRenderOptions = {
 };
 
 type RecaptchaApi = {
+  ready: (callback: () => void) => void;
   render: (container: HTMLElement, options: RecaptchaRenderOptions) => number;
   reset: (widgetId?: number) => void;
 };
@@ -37,7 +38,6 @@ const RECAPTCHA_SCRIPT_URL =
 let scriptPromise: Promise<RecaptchaApi> | undefined;
 
 function loadRecaptcha(): Promise<RecaptchaApi> {
-  if (window.grecaptcha) return Promise.resolve(window.grecaptcha);
   if (scriptPromise) return scriptPromise;
 
   scriptPromise = new Promise<RecaptchaApi>((resolve, reject) => {
@@ -54,29 +54,61 @@ function loadRecaptcha(): Promise<RecaptchaApi> {
     }
 
     const currentScript = script;
+    let settled = false;
     const cleanupListeners = () => {
       currentScript.removeEventListener("load", handleLoad);
       currentScript.removeEventListener("error", handleError);
     };
-    const handleLoad = () => {
-      cleanupListeners();
-      if (window.grecaptcha) {
-        resolve(window.grecaptcha);
-      } else {
-        scriptPromise = undefined;
-        reject(new Error("Google reCAPTCHA loaded without its API."));
-      }
-    };
-    const handleError = () => {
+    const rejectLoad = (error: Error) => {
+      if (settled) return;
+      settled = true;
       cleanupListeners();
       scriptPromise = undefined;
-      reject(new Error("Unable to load Google reCAPTCHA."));
+      reject(error);
+    };
+    const resolveWhenReady = () => {
+      if (settled) return;
+      const recaptcha = window.grecaptcha;
+      if (!recaptcha || typeof recaptcha.ready !== "function") {
+        rejectLoad(new Error("Google reCAPTCHA loaded without its ready API."));
+        return;
+      }
+
+      recaptcha.ready(() => {
+        if (settled) return;
+        const readyRecaptcha = window.grecaptcha;
+        if (
+          readyRecaptcha &&
+          typeof readyRecaptcha.render === "function" &&
+          typeof readyRecaptcha.reset === "function"
+        ) {
+          settled = true;
+          cleanupListeners();
+          resolve(readyRecaptcha);
+          return;
+        }
+        rejectLoad(
+          new Error("Google reCAPTCHA is ready without the checkbox API."),
+        );
+      });
+    };
+    const handleLoad = () => {
+      resolveWhenReady();
+    };
+    const handleError = () => {
+      rejectLoad(new Error("Unable to load Google reCAPTCHA."));
     };
 
     currentScript.addEventListener("load", handleLoad, { once: true });
     currentScript.addEventListener("error", handleError, { once: true });
 
-    if (isNewScript) document.head.appendChild(currentScript);
+    if (window.grecaptcha && typeof window.grecaptcha.ready === "function") {
+      resolveWhenReady();
+    } else if (isNewScript) {
+      document.head.appendChild(currentScript);
+    } else if (currentScript.readyState === "complete") {
+      handleLoad();
+    }
   });
 
   return scriptPromise;
