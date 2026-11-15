@@ -43,14 +43,14 @@ function Login() {
   const authInProgressRef = useRef(false);
   const lastSubmittedCaptchaTokenRef = useRef("");
 
-  // Reset CAPTCHA and invalidate the previous token.
+  // Reset CAPTCHA and invalidate previous token.
   const resetCaptcha = () => {
     lastSubmittedCaptchaTokenRef.current = "";
     setCaptchaToken("");
     setCaptchaResetKey((current) => current + 1);
   };
 
-  // Move to CAPTCHA verification.
+  // Display CAPTCHA after choosing an authentication method.
   const showCaptcha = (method: AuthMethod) => {
     if (loading || oauthLoading || authInProgressRef.current) return;
 
@@ -60,7 +60,7 @@ function Login() {
     setAuthStep("captcha");
   };
 
-  // Return to credentials.
+  // Return to login credentials.
   const backToCredentials = () => {
     if (loading || oauthLoading) return;
 
@@ -70,7 +70,7 @@ function Login() {
     setAuthStep("credentials");
   };
 
-  // Handle authentication errors.
+  // Extract Supabase Edge Function error.
   const getErrorMessage = async (
     loginError: {
       message: string;
@@ -93,7 +93,7 @@ function Login() {
           message = responseBody.error;
         }
       } catch {
-        // Keep the original error message.
+        // Retain original error.
       }
     }
 
@@ -104,7 +104,7 @@ function Login() {
     return message;
   };
 
-  // Redirect authenticated users according to their roles.
+  // Role-based navigation.
   const routeAuthenticatedUser = async (user: { id: string }) => {
     // Superadmin
     const { data: admin, error: adminError } = await supabase
@@ -228,7 +228,7 @@ function Login() {
     navigate("/", { replace: true });
   };
 
-  // Check existing session and handle OAuth callbacks.
+  // Check existing session and OAuth authentication.
   useEffect(() => {
     let isMounted = true;
 
@@ -257,7 +257,6 @@ function Login() {
         session?.user &&
         !authInProgressRef.current
       ) {
-        // Avoid performing Supabase queries inside the auth callback.
         void Promise.resolve().then(async () => {
           if (!isMounted || authInProgressRef.current) return;
 
@@ -277,13 +276,13 @@ function Login() {
     };
   }, [navigate, location.state]);
 
-  // Password login after CAPTCHA verification.
+  // Email and password authentication.
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (authInProgressRef.current || loading || oauthLoading) return;
 
-    // First step: move to CAPTCHA.
+    // First step: show CAPTCHA.
     if (authStep === "credentials") {
       if (!email.trim() || !password) {
         setError("Please enter your email and password.");
@@ -313,7 +312,7 @@ function Login() {
     setLoading(true);
 
     try {
-      // CAPTCHA verification and password authentication.
+      // Verify CAPTCHA and authenticate through Edge Function.
       const { data, error: loginError } =
         await supabase.functions.invoke<{
           access_token?: string;
@@ -328,9 +327,7 @@ function Login() {
         });
 
       if (loginError) {
-        const message = await getErrorMessage(loginError);
-
-        throw new Error(message);
+        throw new Error(await getErrorMessage(loginError));
       }
 
       if (!data?.access_token || !data?.refresh_token) {
@@ -339,7 +336,7 @@ function Login() {
         );
       }
 
-      // Establish the authenticated Supabase session.
+      // Establish Supabase session.
       const { data: sessionData, error: sessionError } =
         await supabase.auth.setSession({
           access_token: data.access_token,
@@ -352,7 +349,7 @@ function Login() {
         throw new Error("Supabase did not return an authenticated user.");
       }
 
-      // Continue existing role-based navigation.
+      // Redirect according to account role.
       await routeAuthenticatedUser(sessionData.user);
 
     } catch (err) {
@@ -365,7 +362,6 @@ function Login() {
 
       setError(message);
 
-      // Clear any session that may have been partially established.
       await supabase.auth.signOut();
 
     } finally {
@@ -396,7 +392,7 @@ function Login() {
     setOauthLoading(true);
 
     try {
-      // Verify CAPTCHA before starting Google OAuth.
+      // Verify CAPTCHA before initiating Google OAuth.
       const { error: captchaError } = await supabase.functions.invoke(
         "captcha-auth",
         {
@@ -408,11 +404,10 @@ function Login() {
       );
 
       if (captchaError) {
-        const message = await getErrorMessage(captchaError);
-        throw new Error(message);
+        throw new Error(await getErrorMessage(captchaError));
       }
 
-      // Start Google OAuth only after CAPTCHA verification.
+      // Initiate Google OAuth.
       const { error: oauthError } =
         await supabase.auth.signInWithOAuth({
           provider: "google",
@@ -423,7 +418,8 @@ function Login() {
 
       if (oauthError) throw oauthError;
 
-      // The browser normally redirects to Google here.
+      // Browser redirects to Google.
+
     } catch (err) {
       console.error("Google OAuth error:", err);
 
@@ -458,7 +454,6 @@ function Login() {
 
             {/* Page heading */}
             <div className="mb-8">
-
               <h2 className="mt-2 text-3xl font-semibold tracking-tight text-[#102A4C] sm:text-4xl">
                 {authStep === "credentials"
                   ? "Sign in"
@@ -470,7 +465,6 @@ function Login() {
                   ? "Access your PESO MABINI account to continue."
                   : "Complete the security verification below before continuing."}
               </p>
-
             </div>
 
             {/* Session expiration notice */}
@@ -520,7 +514,6 @@ function Login() {
                     </label>
 
                     <div className="relative">
-
                       <input
                         id="login-password"
                         type={showPassword ? "text" : "password"}
@@ -541,7 +534,6 @@ function Login() {
                       >
                         {showPassword ? "Hide" : "Show"}
                       </button>
-
                     </div>
 
                     <div className="mt-2 text-right">
@@ -579,7 +571,7 @@ function Login() {
                     Continue
                   </button>
 
-                  {/* Error */}
+                  {/* Login error */}
                   {error && (
                     <p role="alert" className="text-sm text-red-700">
                       {error}
@@ -612,7 +604,7 @@ function Login() {
                 </>
               ) : (
                 <>
-                  {/* CAPTCHA verification step */}
+                  {/* CAPTCHA verification */}
                   <div className="rounded-2xl border border-[#D5DEEB] bg-white p-5 sm:p-7">
 
                     <div className="mb-5 text-center">
@@ -634,19 +626,22 @@ function Login() {
                     </div>
 
                     <Captcha
-                      key={captchaResetKey}
                       onVerify={(token) => {
                         setCaptchaToken(token);
-                        setError("");
+                        if (token) setError("");
                       }}
                       onExpire={() => {
                         setCaptchaToken("");
-                        setError("Your CAPTCHA has expired. Please verify again.");
+                        setError(
+                          "Your CAPTCHA has expired. Please verify again."
+                        );
                       }}
                       onError={() => {
+                        // Captcha.tsx displays its own loading error.
+                        // Do not display a second generic error here.
                         setCaptchaToken("");
-                        setError("CAPTCHA verification failed. Please try again.");
                       }}
+                      resetKey={captchaResetKey}
                       theme="light"
                       size="normal"
                       className="flex justify-center"
@@ -654,7 +649,7 @@ function Login() {
 
                   </div>
 
-                  {/* Error */}
+                  {/* Authentication error */}
                   {error && (
                     <p
                       role="alert"
@@ -664,7 +659,7 @@ function Login() {
                     </p>
                   )}
 
-                  {/* Continue authentication */}
+                  {/* Password authentication */}
                   {authMethod === "password" ? (
                     <button
                       type="submit"
@@ -674,6 +669,7 @@ function Login() {
                       {loading ? "Signing In..." : "Verify and Sign In"}
                     </button>
                   ) : (
+                    /* Google authentication */
                     <button
                       type="button"
                       onClick={() => void signInWithGoogle()}
@@ -693,7 +689,7 @@ function Login() {
                     </button>
                   )}
 
-                  {/* Back button */}
+                  {/* Back */}
                   <button
                     type="button"
                     onClick={backToCredentials}
@@ -707,7 +703,7 @@ function Login() {
 
             </form>
 
-            {/* Registration link */}
+            {/* Registration */}
             <div className="mt-8 pt-2 text-center">
               <p className="text-sm text-slate-500">
                 Don’t have an account?{" "}
