@@ -105,9 +105,6 @@ export default function Captcha({
   const containerRef = useRef<HTMLDivElement>(null);
   const callbacksRef = useRef({ onVerify, onExpire, onError });
   const [loadError, setLoadError] = useState("");
-  const [widgetId, setWidgetId] = useState<string | null>(null);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [isVerified, setIsVerified] = useState(false);
 
   useEffect(() => {
     callbacksRef.current = { onVerify, onExpire, onError };
@@ -126,9 +123,6 @@ export default function Captcha({
     let active = true;
     let renderedWidgetId: string | undefined;
     setLoadError("");
-    setWidgetId(null);
-    setIsVerifying(false);
-    setIsVerified(false);
     callbacksRef.current.onVerify("");
 
     void loadTurnstile()
@@ -142,28 +136,21 @@ export default function Captcha({
           appearance: "always",
           execution: "execute",
           callback: (token) => {
-            setIsVerified(true);
-            setIsVerifying(false);
             callbacksRef.current.onVerify(token);
           },
           "expired-callback": () => {
-            setIsVerified(false);
-            setIsVerifying(false);
             callbacksRef.current.onVerify("");
             callbacksRef.current.onExpire?.();
           },
           "error-callback": () => {
-            setIsVerified(false);
-            setIsVerifying(false);
             callbacksRef.current.onVerify("");
             callbacksRef.current.onError?.();
           },
           "timeout-callback": () => {
-            setIsVerifying(false);
             callbacksRef.current.onVerify("");
           },
         });
-        setWidgetId(renderedWidgetId);
+        turnstile.execute(renderedWidgetId);
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -185,37 +172,8 @@ export default function Captcha({
     };
   }, [siteKey, theme, size, resetKey]);
 
-  const startVerification = () => {
-    if (!widgetId || !window.turnstile || isVerifying || isVerified) return;
-    setIsVerifying(true);
-    try {
-      window.turnstile.execute(widgetId);
-    } catch (error) {
-      setIsVerifying(false);
-      setLoadError(
-        error instanceof Error
-          ? error.message
-          : "Unable to start CAPTCHA verification.",
-      );
-      callbacksRef.current.onVerify("");
-      callbacksRef.current.onError?.();
-    }
-  };
-
   return (
     <div className={className}>
-      <button
-        type="button"
-        onClick={startVerification}
-        disabled={!widgetId || isVerifying || isVerified || Boolean(loadError)}
-        className="mb-3 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {isVerified
-          ? "CAPTCHA verified"
-          : isVerifying
-            ? "Verifying..."
-            : "I'm not a robot — verify"}
-      </button>
       <div ref={containerRef} />
       {loadError && (
         <p className="mt-2 text-sm text-red-700" role="alert">
