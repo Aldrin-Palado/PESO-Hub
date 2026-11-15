@@ -23,12 +23,14 @@ function Login() {
   const [captchaToken, setCaptchaToken] = useState("");
   const [captchaResetKey, setCaptchaResetKey] = useState(0);
   const [captchaRequested, setCaptchaRequested] = useState(false);
+  const [captchaIntent, setCaptchaIntent] = useState<"password" | "google">("password");
   const [oauthLoading, setOauthLoading] = useState(false);
   const [oauthError, setOauthError] = useState("");
 
   const signInWithGoogle = async () => {
     if (loading || oauthLoading) return;
     if (!captchaToken) {
+      setCaptchaIntent("google");
       setCaptchaRequested(true);
       return;
     }
@@ -185,10 +187,11 @@ function Login() {
     };
   }, [navigate, location.state]);
 
-  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleLogin = async (e?: React.FormEvent<HTMLFormElement>) => {
+    e?.preventDefault();
     if (loading) return;
     if (!captchaToken) {
+      setCaptchaIntent("password");
       setCaptchaRequested(true);
       return;
     }
@@ -230,8 +233,19 @@ function Login() {
     } finally {
       setCaptchaToken("");
       setCaptchaResetKey((current) => current + 1);
+      setCaptchaRequested(false);
       setLoading(false);
     }
+  };
+
+  const continueAfterCaptcha = () => {
+    if (!captchaToken || loading || oauthLoading) return;
+    if (captchaIntent === "google") {
+      void signInWithGoogle();
+      return;
+    }
+
+    void handleLogin();
   };
 
   return (
@@ -250,13 +264,52 @@ function Login() {
 
             <div className="mb-8">
               <h2 className="mt-2 text-3xl font-semibold tracking-tight text-[#102A4C] sm:text-4xl">
-                Sign in
+                {captchaRequested ? "Verify your sign in" : "Sign in"}
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-500 sm:text-base">
-                Access your PESO MABINI account to continue.
+                {captchaRequested
+                  ? "Complete the CAPTCHA to continue."
+                  : "Access your PESO MABINI account to continue."}
               </p>
             </div>
 
+            {captchaRequested ? (
+              <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <Captcha
+                  onVerify={setCaptchaToken}
+                  resetKey={captchaResetKey}
+                  className="flex flex-col items-center"
+                />
+                <button
+                  type="button"
+                  onClick={continueAfterCaptcha}
+                  disabled={!captchaToken || loading || oauthLoading}
+                  className="w-full rounded-2xl bg-[#315FEA] px-5 py-4 text-base font-semibold text-white shadow-[0_12px_24px_-12px_rgba(49,95,234,0.75)] transition hover:bg-[#244FD4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loading
+                    ? "Signing In..."
+                    : oauthLoading
+                      ? "Opening Google..."
+                      : captchaIntent === "google"
+                        ? "Continue with Google"
+                        : "Continue to Sign In"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCaptchaRequested(false);
+                    setCaptchaToken("");
+                    setCaptchaResetKey((current) => current + 1);
+                    setOauthError("");
+                  }}
+                  disabled={loading || oauthLoading}
+                  className="w-full text-sm font-semibold text-slate-600 transition hover:text-[#315FEA] disabled:opacity-60"
+                >
+                  Back to sign in
+                </button>
+              </div>
+            ) : (
+              <>
             {sessionExpired && (
               <p
                 role="status"
@@ -365,20 +418,6 @@ function Login() {
                 {oauthLoading ? "Opening Google..." : "Continue with Google"}
               </button>
 
-              <p className="text-center text-sm text-slate-600">
-                {captchaRequested
-                  ? "Complete the CAPTCHA, then select your sign-in option."
-                  : "Select a sign-in option to show the CAPTCHA verification."}
-              </p>
-
-              {captchaRequested && (
-                <Captcha
-                  onVerify={setCaptchaToken}
-                  resetKey={captchaResetKey}
-                  className="flex flex-col items-center"
-                />
-              )}
-
             </form>
 
             <div className="mt-8 pt-2 text-center">
@@ -404,6 +443,8 @@ function Login() {
               <AppIcon name="arrowLeft" className="h-4 w-4" />
               Return to Home
             </Link>
+              </>
+            )}
           </div>
         </section>
       </main>
