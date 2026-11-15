@@ -277,8 +277,11 @@ function Login() {
   }, [navigate, location.state]);
 
   // Email and password authentication.
-  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleLogin = async (
+    e?: React.FormEvent<HTMLFormElement>,
+    verifiedCaptchaToken = captchaToken,
+  ) => {
+    e?.preventDefault();
 
     if (authInProgressRef.current || loading || oauthLoading) return;
 
@@ -295,14 +298,14 @@ function Login() {
 
     if (authMethod !== "password") return;
 
-    if (!captchaToken) {
+    if (!verifiedCaptchaToken) {
       setError("Please complete the CAPTCHA verification.");
       return;
     }
 
-    if (lastSubmittedCaptchaTokenRef.current === captchaToken) return;
+    if (lastSubmittedCaptchaTokenRef.current === verifiedCaptchaToken) return;
 
-    const submittedToken = captchaToken;
+    const submittedToken = verifiedCaptchaToken;
 
     authInProgressRef.current = true;
     lastSubmittedCaptchaTokenRef.current = submittedToken;
@@ -632,6 +635,8 @@ function Login() {
                           setError("");
                           if (authMethod === "google") {
                             void signInWithGoogle(token);
+                          } else {
+                            void handleLogin(undefined, token);
                           }
                         }
                       }}
@@ -664,34 +669,25 @@ function Login() {
                     </p>
                   )}
 
-                  {/* Password authentication */}
+                  {/* Continue automatically after CAPTCHA verification. */}
                   {authMethod === "password" ? (
-                    <button
-                      type="submit"
-                      disabled={loading || oauthLoading || !captchaToken}
-                      className="w-full rounded-2xl bg-[#315FEA] px-5 py-4 text-base font-semibold text-white shadow-[0_12px_24px_-12px_rgba(49,95,234,0.75)] transition hover:bg-[#244FD4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA] disabled:cursor-not-allowed disabled:opacity-60"
+                    <p
+                      role="status"
+                      className="text-center text-sm font-medium text-slate-600"
                     >
-                      {loading ? "Signing In..." : "Verify and Sign In"}
-                    </button>
+                      {loading
+                        ? "Signing you in..."
+                        : "Complete the CAPTCHA to sign in automatically."}
+                    </p>
                   ) : (
-                    /* Google authentication */
-                    <button
-                      type="button"
-                      onClick={() => void signInWithGoogle()}
-                      disabled={loading || oauthLoading || !captchaToken}
-                      className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 text-base font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+                    <p
+                      role="status"
+                      className="text-center text-sm font-medium text-slate-600"
                     >
-                      <img
-                        src={googleLogo}
-                        alt=""
-                        aria-hidden="true"
-                        className="h-9 w-9 object-contain"
-                      />
-
                       {oauthLoading
                         ? "Opening Google..."
-                        : "Verify and Continue with Google"}
-                    </button>
+                        : "Complete the CAPTCHA to continue with Google automatically."}
+                    </p>
                   )}
 
                   {/* Back */}
