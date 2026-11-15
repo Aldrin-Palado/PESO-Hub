@@ -946,7 +946,7 @@ export default function EmployerDashboard() {
 
       case "Company Profile":
         return (
-          <div className="space-y-8">
+          <div className="mx-auto max-w-5xl space-y-6 pb-8">
             <CompanyProfileModule
               profile={companyProfile}
               onSave={handleSaveCompanyProfile}

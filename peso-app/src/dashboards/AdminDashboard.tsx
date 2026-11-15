@@ -805,9 +805,9 @@ export default function AdminDashboard() {
               ["shortlisted", "Shortlisted"],
               ["qualified", "Qualified"],
               ["interviewed", "Interviewed"],
-              ["withdrawn", "Withdrawn"],
               ["hired", "Hired"],
               ["rejected", "Rejected"],
+              ["withdrawn", "Withdrawn"],
             ] as const;
             const monthRanges = Array.from({ length: 6 }, (_, index) => {
               const now = new Date();

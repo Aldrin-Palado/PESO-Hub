@@ -267,9 +267,9 @@ export default function ApplicationsModule({
           "shortlisted",
           "qualified",
           "interviewed",
-          "withdrawn",
           "hired",
           "rejected",
+          "withdrawn",
         ].map((item) => (          <button            key={item}
             type="button"
             onClick={() => setFilter(item)}

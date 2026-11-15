@@ -37,9 +37,9 @@ const STATUSES = [
   { value: "shortlisted", label: "Shortlisted", color: getApplicationStatusStyles("shortlisted") },
   { value: "qualified", label: "Qualified", color: getApplicationStatusStyles("qualified") },
   { value: "interviewed", label: "Interviewed", color: getApplicationStatusStyles("interviewed") },
-  { value: "withdrawn", label: "Withdrawn", color: getApplicationStatusStyles("withdrawn") },
   { value: "hired", label: "You're Hired", color: getApplicationStatusStyles("hired") },
   { value: "rejected", label: "Rejected", color: getApplicationStatusStyles("rejected") },
+  { value: "withdrawn", label: "Withdrawn", color: getApplicationStatusStyles("withdrawn") },
 ];
 
 function normalizeApplicationStatus(value: string): string {
