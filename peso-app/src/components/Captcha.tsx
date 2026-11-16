@@ -1,26 +1,20 @@
+
 import { useEffect, useRef, useState } from "react";
-
-type TurnstileTheme = "light" | "dark" | "auto";
-type TurnstileSize = "normal" | "compact";
-
-type TurnstileRenderOptions = {
-  sitekey: string;
-  theme: TurnstileTheme;
-  size: TurnstileSize;
-  appearance: "always";
-  execution: "execute";
-  callback: (token: string) => void;
-  "expired-callback": () => void;
-  "error-callback": () => void;
-  "timeout-callback": () => void;
-};
 
 type TurnstileApi = {
   render: (
     container: HTMLElement,
-    options: TurnstileRenderOptions,
+    options: {
+      sitekey: string;
+      theme?: "light" | "dark" | "auto";
+      size?: "normal" | "compact";
+      callback: (token: string) => void;
+      "expired-callback"?: () => void;
+      "error-callback"?: (errorCode?: string) => void;
+    }
   ) => string;
-  execute: (widgetId: string) => void;
+
+  reset: (widgetId?: string) => void;
   remove: (widgetId: string) => void;
 };
 
@@ -35,61 +29,141 @@ type CaptchaProps = {
   onExpire?: () => void;
   onError?: () => void;
   siteKey?: string;
-  theme?: TurnstileTheme;
-  size?: TurnstileSize;
+  theme?: "light" | "dark" | "auto";
+  size?: "normal" | "compact";
   resetKey?: number;
   className?: string;
 };
 
-const TURNSTILE_SCRIPT_URL =
+const SCRIPT_URL =
   "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 
-let scriptPromise: Promise<TurnstileApi> | undefined;
+const SCRIPT_SELECTOR =
+  'script[data-peso-turnstile="true"]';
+
+let turnstilePromise: Promise<TurnstileApi> | null = null;
 
 function loadTurnstile(): Promise<TurnstileApi> {
-  if (window.turnstile) return Promise.resolve(window.turnstile);
-  if (scriptPromise) return scriptPromise;
+  // Use an already initialized API.
+  if (
+    window.turnstile &&
+    typeof window.turnstile.render === "function" &&
+    typeof window.turnstile.reset === "function"
+  ) {
+    return Promise.resolve(window.turnstile);
+  }
 
-  scriptPromise = new Promise<TurnstileApi>((resolve, reject) => {
-    let script = document.querySelector<HTMLScriptElement>(
-      `script[src^="${TURNSTILE_SCRIPT_URL}"]`,
-    );
-    const isNewScript = !script;
+  // Prevent duplicate script loading.
+  if (turnstilePromise) {
+    return turnstilePromise;
+  }
 
-    if (!script) {
-      script = document.createElement("script");
-      script.src = TURNSTILE_SCRIPT_URL;
-      script.async = true;
-      script.defer = true;
-    }
+  turnstilePromise = new Promise<TurnstileApi>(
+    (resolve, reject) => {
+      let script = document.querySelector<HTMLScriptElement>(
+        SCRIPT_SELECTOR
+      );
 
-    const currentScript = script;
-    const cleanupListeners = () => {
-      currentScript.removeEventListener("load", handleLoad);
-      currentScript.removeEventListener("error", handleError);
-    };
-    const handleLoad = () => {
-      cleanupListeners();
-      if (window.turnstile) {
-        resolve(window.turnstile);
+      let settled = false;
+
+      let timeout: number;
+
+      const cleanup = () => {
+        script?.removeEventListener("load", handleLoad);
+        script?.removeEventListener("error", handleError);
+        window.clearTimeout(timeout);
+      };
+
+      const fail = (error: Error) => {
+        if (settled) return;
+
+        settled = true;
+        cleanup();
+        turnstilePromise = null;
+
+        reject(error);
+      };
+
+      const handleLoad = () => {
+        if (settled) return;
+
+        const api = window.turnstile;
+
+        if (
+          api &&
+          typeof api.render === "function" &&
+          typeof api.reset === "function" &&
+          typeof api.remove === "function"
+        ) {
+          settled = true;
+          cleanup();
+          resolve(api);
+          return;
+        }
+
+        fail(
+          new Error(
+            "Cloudflare script loaded, but the Turnstile API is unavailable."
+          )
+        );
+      };
+
+      const handleError = () => {
+        fail(
+          new Error(
+            "Unable to load Cloudflare Turnstile. Check your browser, network, or firewall settings."
+          )
+        );
+      };
+
+      timeout = window.setTimeout(() => {
+        fail(
+          new Error(
+            "Cloudflare Turnstile loading timed out. Please refresh and try again."
+          )
+        );
+      }, 30000);
+
+      // Create script if it does not exist.
+      if (!script) {
+        script = document.createElement("script");
+
+        script.src = SCRIPT_URL;
+        script.dataset.pesoTurnstile = "true";
+
+        // Do not add async or defer.
+        script.async = false;
       } else {
-        scriptPromise = undefined;
-        reject(new Error("Cloudflare Turnstile loaded without its API."));
+        // Remove conflicting script attributes.
+        script.removeAttribute("async");
+        script.removeAttribute("defer");
       }
-    };
-    const handleError = () => {
-      cleanupListeners();
-      scriptPromise = undefined;
-      reject(new Error("Unable to load Cloudflare Turnstile."));
-    };
 
-    currentScript.addEventListener("load", handleLoad, { once: true });
-    currentScript.addEventListener("error", handleError, { once: true });
+      const currentScript = script;
 
-    if (isNewScript) document.head.appendChild(currentScript);
+      currentScript.addEventListener(
+        "load",
+        handleLoad,
+        { once: true }
+      );
+
+      currentScript.addEventListener(
+        "error",
+        handleError,
+        { once: true }
+      );
+
+      // Add script to document.
+      if (!currentScript.isConnected) {
+        document.head.appendChild(currentScript);
+      }
+    }
+  ).catch((error) => {
+    turnstilePromise = null;
+    throw error;
   });
 
-  return scriptPromise;
+  return turnstilePromise;
 }
 
 export default function Captcha({
@@ -103,81 +177,174 @@ export default function Captcha({
   className = "",
 }: CaptchaProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const callbacksRef = useRef({ onVerify, onExpire, onError });
-  const [loadError, setLoadError] = useState("");
 
+  const widgetIdRef = useRef<string | null>(null);
+
+  const previousResetKeyRef = useRef(resetKey);
+
+  const callbacksRef = useRef({
+    onVerify,
+    onExpire,
+    onError,
+  });
+
+  const [error, setError] = useState("");
+
+  // Keep callbacks updated without reloading the widget.
   useEffect(() => {
-    callbacksRef.current = { onVerify, onExpire, onError };
+    callbacksRef.current = {
+      onVerify,
+      onExpire,
+      onError,
+    };
   }, [onVerify, onExpire, onError]);
 
+  // Load and render Cloudflare Turnstile.
   useEffect(() => {
-    if (!siteKey) {
-      setLoadError(
-        "CAPTCHA is not configured. Set VITE_TURNSTILE_SITE_KEY to enable it.",
+    const container = containerRef.current;
+
+    if (!container) return;
+
+    if (!siteKey?.trim()) {
+      setError(
+        "Cloudflare Turnstile Site Key is missing. Check your environment variables."
       );
+
       callbacksRef.current.onVerify("");
       callbacksRef.current.onError?.();
+
       return;
     }
 
     let active = true;
-    let renderedWidgetId: string | undefined;
-    setLoadError("");
+
+    let renderedWidgetId: string | null = null;
+
+    container.replaceChildren();
+
+    setError("");
     callbacksRef.current.onVerify("");
 
     void loadTurnstile()
-      .then((turnstile) => {
-        if (!active || !containerRef.current) return;
+      .then((api) => {
+        if (!active) return;
 
-        renderedWidgetId = turnstile.render(containerRef.current, {
-          sitekey: siteKey,
+        // Make sure the container is empty before rendering.
+        container.replaceChildren();
+
+        const widgetId = api.render(container, {
+          sitekey: siteKey.trim(),
           theme,
           size,
-          appearance: "always",
-          execution: "execute",
-          callback: (token) => {
+
+          // Successful verification.
+          callback: (token: string) => {
+            if (!active) return;
+
+            setError("");
             callbacksRef.current.onVerify(token);
           },
+
+          // Token expired.
           "expired-callback": () => {
+            if (!active) return;
+
             callbacksRef.current.onVerify("");
             callbacksRef.current.onExpire?.();
           },
-          "error-callback": () => {
+
+          // Verification error.
+          "error-callback": (errorCode) => {
+            if (!active) return;
+
+            console.error(
+              "[Cloudflare Turnstile] Error code:",
+              errorCode
+            );
+
             callbacksRef.current.onVerify("");
+
+            setError(
+              "CAPTCHA verification failed. Please try again."
+            );
+
             callbacksRef.current.onError?.();
           },
-          "timeout-callback": () => {
-            callbacksRef.current.onVerify("");
-          },
         });
-        turnstile.execute(renderedWidgetId);
+
+        renderedWidgetId = widgetId;
+        widgetIdRef.current = widgetId;
       })
-      .catch((error: unknown) => {
+      .catch((err: unknown) => {
         if (!active) return;
-        console.error("Cloudflare Turnstile error:", error);
-        setLoadError(
-          error instanceof Error
-            ? error.message
-            : "Unable to load the CAPTCHA challenge.",
+
+        console.error(
+          "[Cloudflare Turnstile] Loading error:",
+          err
         );
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Unable to load CAPTCHA. Please try again."
+        );
+
         callbacksRef.current.onVerify("");
         callbacksRef.current.onError?.();
       });
 
+    // Cleanup when component unmounts.
     return () => {
       active = false;
-      if (renderedWidgetId && window.turnstile) {
-        window.turnstile.remove(renderedWidgetId);
+
+      if (renderedWidgetId !== null) {
+        try {
+          window.turnstile?.remove(renderedWidgetId);
+        } catch (err) {
+          console.warn(
+            "[Cloudflare Turnstile] Widget cleanup error:",
+            err
+          );
+        }
       }
+
+      if (widgetIdRef.current === renderedWidgetId) {
+        widgetIdRef.current = null;
+      }
+
+      container.replaceChildren();
     };
-  }, [siteKey, theme, size, resetKey]);
+  }, [siteKey, theme, size]);
+
+  // Reset CAPTCHA when resetKey changes.
+  useEffect(() => {
+    if (previousResetKeyRef.current === resetKey) {
+      return;
+    }
+
+    previousResetKeyRef.current = resetKey;
+
+    callbacksRef.current.onVerify("");
+    setError("");
+
+    if (
+      widgetIdRef.current !== null &&
+      window.turnstile
+    ) {
+      window.turnstile.reset(widgetIdRef.current);
+    }
+  }, [resetKey]);
 
   return (
     <div className={className}>
       <div ref={containerRef} />
-      {loadError && (
-        <p className="mt-2 text-sm text-red-700" role="alert">
-          {loadError}
+
+      {error && (
+        <p
+          role="alert"
+          className="mt-2 text-center text-sm text-red-700"
+        >
+          {error}
         </p>
       )}
     </div>

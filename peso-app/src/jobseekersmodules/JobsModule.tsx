@@ -103,6 +103,7 @@ export default function JobsModule({
   const [search, setSearch] = useState("");
   const [location, setLocation] = useState("All");
   const [type, setType] = useState("All");
+  const [employer, setEmployer] = useState("All");
   const [savedJobs, setSavedJobs] = useState<string[]>([]);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [companyModalJob, setCompanyModalJob] = useState<Job | null>(null);
@@ -282,9 +283,30 @@ export default function JobsModule({
       const typeMatch =
         type === "All" || job.type === type;
 
-      return searchMatch && locationMatch && typeMatch;
+      const employerMatch =
+        employer === "All" ||
+        job.company.trim().toLowerCase() === employer.toLowerCase();
+
+      return searchMatch && locationMatch && typeMatch && employerMatch;
     });
-  }, [jobs, search, location, type]);
+  }, [jobs, search, location, type, employer]);
+
+  const employerOptions = useMemo(() => {
+    const employers = new Map<string, string>();
+    jobs.forEach((job) => {
+      const name = job.company.trim();
+      if (!name || name === "Company name not provided") return;
+      const key = name.toLowerCase();
+      if (!employers.has(key)) employers.set(key, name);
+    });
+
+    return [
+      { value: "All", label: "All Employers" },
+      ...Array.from(employers.values())
+        .sort((left, right) => left.localeCompare(right))
+        .map((name) => ({ value: name, label: name })),
+    ];
+  }, [jobs]);
 
   const toggleSave = async (jobId: string) => {
     const isSaved = savedJobs.includes(jobId);
@@ -639,6 +661,14 @@ export default function JobsModule({
               { value: "Part-time", label: "Part-time" },
             ]}
             className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-blue-500"
+          />
+
+          <FilterDropdown
+            value={employer}
+            onChange={setEmployer}
+            ariaLabel="Filter jobs by employer"
+            options={employerOptions}
+            className="min-w-[10rem] rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-blue-500"
           />
 
         </div>

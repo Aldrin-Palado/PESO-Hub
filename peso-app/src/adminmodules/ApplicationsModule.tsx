@@ -58,9 +58,9 @@ const STATUSES = [
   { value: "shortlisted", label: "Shortlisted", color: getApplicationStatusStyles("shortlisted") },
   { value: "qualified", label: "Qualified", color: getApplicationStatusStyles("qualified") },
   { value: "interviewed", label: "Interviewed", color: getApplicationStatusStyles("interviewed") },
-  { value: "withdrawn", label: "Withdrawn", color: getApplicationStatusStyles("withdrawn") },
   { value: "hired", label: "You're Hired", color: getApplicationStatusStyles("hired") },
   { value: "rejected", label: "Rejected", color: getApplicationStatusStyles("rejected") },
+  { value: "withdrawn", label: "Withdrawn", color: getApplicationStatusStyles("withdrawn") },
 ];
 
 function normalizeApplicationStatus(value: string): string {
@@ -639,7 +639,6 @@ export default function ApplicationsModule({
                         <option value="shortlisted">Shortlisted</option>
                         <option value="qualified">Qualified</option>
                         <option value="interviewed">Interviewed</option>
-                        <option value="withdrawn">Withdrawn</option>
                         {applicationScope === "peso" &&
                         canDecideApplications &&
                         application.can_update_status && (
@@ -656,6 +655,7 @@ export default function ApplicationsModule({
                             <option value="rejected">Rejected</option>
                           </>
                         )}
+                        <option value="withdrawn">Withdrawn</option>
                       </select>
                     ) : (
                       <div className="flex items-center gap-2">

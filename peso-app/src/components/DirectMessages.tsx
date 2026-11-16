@@ -687,20 +687,69 @@ export default function DirectMessages({
                   return (
                     <div
                       key={message.message_id}
-                      className={`flex ${ownMessage ? "justify-end" : "justify-start"}`}
+                      className={`flex items-start gap-2 ${
+                        ownMessage ? "justify-end" : "justify-start"
+                      }`}
                     >
+                      {canDeleteMessage && (
+                        <div className="relative shrink-0 self-center">
+                          <button
+                            type="button"
+                            aria-label="Message options"
+                            aria-haspopup="menu"
+                            aria-expanded={openMessageMenuId === message.message_id}
+                            onClick={() =>
+                              setOpenMessageMenuId((current) =>
+                                current === message.message_id
+                                  ? null
+                                  : message.message_id,
+                              )
+                            }
+                            disabled={deletingMessageId !== null}
+                            className="rounded-full p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <svg
+                              aria-hidden="true"
+                              viewBox="0 0 24 24"
+                              className="h-4 w-4"
+                              fill="currentColor"
+                            >
+                              <circle cx="12" cy="5" r="1.75" />
+                              <circle cx="12" cy="12" r="1.75" />
+                              <circle cx="12" cy="19" r="1.75" />
+                            </svg>
+                          </button>
+                          {openMessageMenuId === message.message_id && (
+                            <div
+                              role="menu"
+                              className="absolute right-full top-1/2 z-10 mr-1 min-w-28 -translate-y-1/2 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+                            >
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setOpenMessageMenuId(null);
+                                  void deleteMessage(message);
+                                }}
+                                disabled={deletingMessageId !== null}
+                                className="w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {deletingMessageId === message.message_id
+                                  ? "Deleting..."
+                                  : "Delete"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <article
-                        className={`relative max-w-[85%] rounded-2xl px-4 py-3 shadow-sm ${
+                        className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-sm ${
                           ownMessage
                             ? "rounded-br-md bg-[#0446A7] text-white"
                             : "rounded-bl-md border border-slate-200 bg-white text-slate-800"
                         }`}
                       >
-                        <p
-                          className={`whitespace-pre-wrap break-words text-sm ${
-                            canDeleteMessage ? "pr-6" : ""
-                          }`}
-                        >
+                        <p className="whitespace-pre-wrap break-words text-sm">
                           {message.body}
                         </p>
                         <time
@@ -711,61 +760,6 @@ export default function DirectMessages({
                         >
                           {new Date(message.created_at).toLocaleString()}
                         </time>
-                        {canDeleteMessage && (
-                          <div className="absolute right-1 top-1">
-                            <button
-                              type="button"
-                              aria-label="Message options"
-                              aria-haspopup="menu"
-                              aria-expanded={openMessageMenuId === message.message_id}
-                              onClick={() =>
-                                setOpenMessageMenuId((current) =>
-                                  current === message.message_id
-                                    ? null
-                                    : message.message_id,
-                                )
-                              }
-                              disabled={deletingMessageId !== null}
-                              className={`rounded-full p-1 ${
-                                ownMessage
-                                  ? "text-blue-100 hover:bg-blue-800 hover:text-white"
-                                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                              } disabled:cursor-not-allowed disabled:opacity-50`}
-                            >
-                              <svg
-                                aria-hidden="true"
-                                viewBox="0 0 24 24"
-                                className="h-4 w-4"
-                                fill="currentColor"
-                              >
-                                <circle cx="5" cy="12" r="1.75" />
-                                <circle cx="12" cy="12" r="1.75" />
-                                <circle cx="19" cy="12" r="1.75" />
-                              </svg>
-                            </button>
-                            {openMessageMenuId === message.message_id && (
-                              <div
-                                role="menu"
-                                className="absolute right-0 top-full z-10 mt-1 min-w-28 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
-                              >
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  onClick={() => {
-                                    setOpenMessageMenuId(null);
-                                    void deleteMessage(message);
-                                  }}
-                                  disabled={deletingMessageId !== null}
-                                  className="w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  {deletingMessageId === message.message_id
-                                    ? "Deleting..."
-                                    : "Delete"}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </article>
                     </div>
                   );

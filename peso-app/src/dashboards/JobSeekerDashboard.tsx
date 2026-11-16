@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { renderAsync } from "docx-preview";
 import AppIcon from "../components/AppIcon";
 import AutoResizeTextarea from "../components/AutoResizeTextarea";
 import ESignatureInput from "../components/ESignatureInput";
@@ -11,6 +12,7 @@ import {
   RESUME_FORMATS_LABEL,
   RESUME_MIME_TYPES,
   getResumeExtension,
+  getResumeFileName,
 } from "../services/resumes";
 
 import JobSeekerSidebar, {
@@ -50,17 +52,43 @@ type Seeker = {
   birth_date: string | null;
   resume_url: string | null;
   verification_status: "pending" | "verified" | "not_approved";
-  verification_refresh_required: boolean;
   registration_details: unknown;
 };
+
+function getRegistrationReadinessMessage(
+  status: Seeker["verification_status"],
+): string {
+  if (status === "pending") {
+    return "Your registration is complete and ready for PESO verification.";
+  }
+  if (status === "verified") {
+    return "Your registration is complete and verified. Your account is ready to find and apply for jobs.";
+  }
+  return "Your registration is complete, but your account was not approved by PESO. Please contact PESO for next steps.";
+}
+
+function getRegistrationReadinessClass(
+  status: Seeker["verification_status"],
+): string {
+  if (status === "verified") return "border-green-200 bg-green-50 text-green-800";
+  if (status === "not_approved") return "border-amber-200 bg-amber-50 text-amber-900";
+  return "border-blue-200 bg-blue-50 text-blue-900";
+}
 
 type JobSeekerNotification = {
   message_id: string;
   sender_user_id: string;
   body: string;
   created_at: string;
+  read_at: string | null;
   sender_label: string;
 };
+
+type ResumePreview =
+  | { format: "pdf"; url: string }
+  | { format: "docx"; data: ArrayBuffer }
+  | { format: "csv"; content: string }
+  | { format: "unsupported"; fileName: string };
 
 type MessageContactSummary = {
   user_id: string;
@@ -68,18 +96,41 @@ type MessageContactSummary = {
   role: string;
 };
 
-async function loadUnreadJobSeekerMessages(
+async function loadJobSeekerNotifications(
   userId: string,
 ): Promise<JobSeekerNotification[]> {
-  const { data: messages, error: messagesError } = await supabase
-    .from("peso_messages")
-    .select("message_id, sender_user_id, body, created_at")
-    .eq("recipient_user_id", userId)
-    .is("read_at", null)
-    .order("created_at", { ascending: false });
+  const [recentResult, unreadResult] = await Promise.all([
+    supabase
+      .from("peso_messages")
+      .select("message_id, sender_user_id, body, created_at, read_at")
+      .eq("recipient_user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(3),
+    supabase
+      .from("peso_messages")
+      .select("message_id, sender_user_id, body, created_at, read_at")
+      .eq("recipient_user_id", userId)
+      .is("read_at", null)
+      .order("created_at", { ascending: false }),
+  ]);
 
-  if (messagesError) throw messagesError;
-  if (!messages?.length) return [];
+  if (recentResult.error) throw recentResult.error;
+  if (unreadResult.error) throw unreadResult.error;
+
+  const unreadMessages = unreadResult.data ?? [];
+  const readRecentMessages = (recentResult.data ?? []).filter(
+    (message) => message.read_at !== null,
+  );
+  const messages = [
+    ...unreadMessages,
+    ...readRecentMessages.slice(0, Math.max(0, 3 - unreadMessages.length)),
+  ].sort(
+    (left, right) =>
+      new Date(right.created_at).getTime() -
+      new Date(left.created_at).getTime(),
+  );
+
+  if (!messages.length) return [];
 
   const { data: contacts, error: contactsError } = await supabase.rpc(
     "get_peso_message_contacts",
@@ -130,6 +181,7 @@ type ScreeningField = {
   type?: "text" | "number" | "date" | "textarea" | "select" | "checkboxes" | "checkbox";
   options?: string[];
   required?: boolean;
+  hint?: string;
 };
 
 const screeningSections: {
@@ -176,7 +228,12 @@ const screeningSections: {
     title: "II. Job Preference",
     fields: [
       { key: "preferredOccupation", label: "Preferred Occupation", required: true },
-      { key: "companyApplyingFor", label: "Company Applying For", required: true },
+      {
+        key: "companyApplyingFor",
+        label: "Company Applying For",
+        required: true,
+        hint: "Put N/A if undecided",
+      },
       { key: "preferredWorkLocation", label: "Preferred Work Location", type: "select", options: ["Mabini", "Batangas Province", "Anywhere in the Philippines", "Other"], required: true },
       { key: "otherWorkLocation", label: "Other Preferred Work Location" },
     ],
@@ -202,9 +259,9 @@ const screeningSections: {
   {
     title: "V. Technical / Vocational and Other Training",
     fields: [
-      { key: "training1", label: "Training / Course 1", type: "textarea", required: true },
-      { key: "training2", label: "Training / Course 2", type: "textarea", required: true },
-      { key: "training3", label: "Training / Course 3", type: "textarea", required: true },
+      { key: "training1", label: "Training / Course 1", type: "textarea", required: true, hint: "Put N/A if none" },
+      { key: "training2", label: "Training / Course 2", type: "textarea", required: true, hint: "Put N/A if none" },
+      { key: "training3", label: "Training / Course 3", type: "textarea", required: true, hint: "Put N/A if none" },
     ],
   },
   {
@@ -343,6 +400,9 @@ export default function JobSeekerDashboard() {
   const [seeker, setSeeker] = useState<Seeker | null>(null);
   const [hasProfilePhoto, setHasProfilePhoto] = useState<boolean | null>(null);
   const [notifications, setNotifications] = useState<JobSeekerNotification[]>([]);
+  const unreadNotificationCount = notifications.filter(
+    (notification) => notification.read_at === null,
+  ).length;
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationsError, setNotificationsError] = useState("");
@@ -364,6 +424,10 @@ export default function JobSeekerDashboard() {
   const [openingResume, setOpeningResume] = useState(false);
   const [resumeError, setResumeError] = useState("");
   const [resumeSuccess, setResumeSuccess] = useState("");
+  const [resumePreview, setResumePreview] = useState<ResumePreview | null>(null);
+  const [resumePreviewError, setResumePreviewError] = useState("");
+  const docxPreviewContainer = useRef<HTMLDivElement>(null);
+  const docxPreviewStyles = useRef<HTMLDivElement>(null);
   // =====================================================
   // LOAD CURRENT JOB SEEKER
   // =====================================================
@@ -388,7 +452,11 @@ export default function JobSeekerDashboard() {
 
     const animationFrame = window.requestAnimationFrame(() => {
       document
-        .getElementById(getScreeningSectionId(profileSectionToFocus))
+        .getElementById(
+          profileSectionToFocus === "Resume / CV"
+            ? "job-seeker-resume"
+            : getScreeningSectionId(profileSectionToFocus),
+        )
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
       setProfileSectionToFocus(null);
     });
@@ -397,14 +465,38 @@ export default function JobSeekerDashboard() {
   }, [profileSectionToFocus, screeningDetailsOpen]);
 
   useEffect(() => {
+    if (resumePreview?.format !== "docx") return;
+
+    const body = docxPreviewContainer.current;
+    const styles = docxPreviewStyles.current;
+    if (!body || !styles) return;
+
+    let active = true;
+    body.replaceChildren();
+    styles.replaceChildren();
+    void renderAsync(resumePreview.data, body, styles).catch((previewError: unknown) => {
+      console.error("Could not render DOCX resume preview:", previewError);
+      if (active) {
+        setResumePreviewError("This DOCX file could not be previewed.");
+      }
+    });
+
+    return () => {
+      active = false;
+      body.replaceChildren();
+      styles.replaceChildren();
+    };
+  }, [resumePreview]);
+
+  useEffect(() => {
     if (!seeker?.user_id) return;
 
     let active = true;
     const refreshNotifications = async () => {
       try {
-        const unreadMessages = await loadUnreadJobSeekerMessages(seeker.user_id);
+        const messages = await loadJobSeekerNotifications(seeker.user_id);
         if (active) {
-          setNotifications(unreadMessages);
+          setNotifications(messages);
           setNotificationsError("");
         }
       } catch (notificationError) {
@@ -453,7 +545,7 @@ export default function JobSeekerDashboard() {
     setNotificationsLoading(true);
     setNotificationsError("");
     try {
-      setNotifications(await loadUnreadJobSeekerMessages(seeker.user_id));
+      setNotifications(await loadJobSeekerNotifications(seeker.user_id));
     } catch (notificationError) {
       console.error("Could not load Job Seeker notifications:", notificationError);
       setNotificationsError("Notifications could not be loaded. Please try again.");
@@ -465,20 +557,28 @@ export default function JobSeekerDashboard() {
   const openNotificationConversation = async (
     notification: JobSeekerNotification,
   ) => {
-    const { error: readError } = await supabase
-      .from("peso_messages")
-      .update({ read_at: new Date().toISOString() })
-      .eq("message_id", notification.message_id);
+    if (notification.read_at === null) {
+      const readAt = new Date().toISOString();
+      const { error: readError } = await supabase
+        .from("peso_messages")
+        .update({ read_at: readAt })
+        .eq("message_id", notification.message_id);
 
-    if (readError) {
-      console.error("Could not mark notification as read:", readError);
-      setNotificationsError("The message could not be marked as read. Please try again.");
-      return;
+      if (readError) {
+        console.error("Could not mark notification as read:", readError);
+        setNotificationsError("The message could not be marked as read. Please try again.");
+        return;
+      }
+
+      setNotifications((current) =>
+        current.map((item) =>
+          item.message_id === notification.message_id
+            ? { ...item, read_at: readAt }
+            : item,
+        ),
+      );
     }
 
-    setNotifications((current) =>
-      current.filter((item) => item.message_id !== notification.message_id),
-    );
     setNotificationsOpen(false);
     setMessageContactToOpen(notification.sender_user_id);
     handlePageChange("Messages");
@@ -515,7 +615,6 @@ export default function JobSeekerDashboard() {
             birth_date,
             resume_url,
             verification_status,
-            verification_refresh_required,
             registration_details
           `
         )
@@ -586,9 +685,8 @@ export default function JobSeekerDashboard() {
 
   const openRegistrationTask = (task: string) => {
     if (task === "Resume / CV") {
-      document
-        .getElementById("job-seeker-resume")
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setProfileSectionToFocus(task);
+      setScreeningDetailsOpen(true);
       return;
     }
 
@@ -635,11 +733,10 @@ export default function JobSeekerDashboard() {
           birth_date: birthDate || null,
           contact_no: contactNumber || null,
           address: presentAddress || null,
-          verification_details_reviewed_at: new Date().toISOString(),
         })
         .eq("job_seeker_id", seeker.job_seeker_id)
         .select(
-          "registration_details, full_name, birth_date, contact_no, address, verification_status, verification_refresh_required",
+          "registration_details, full_name, birth_date, contact_no, address, verification_status",
         )
         .maybeSingle();
 
@@ -650,6 +747,8 @@ export default function JobSeekerDashboard() {
 
       setSeeker({ ...seeker, ...data });
       setEditingScreening(false);
+      setEditingResume(false);
+      setResumeFile(null);
       setProfileSuccess("Your screening details have been updated.");
     } catch (saveError) {
       console.error("Job seeker screening details update error:", saveError);
@@ -682,7 +781,8 @@ export default function JobSeekerDashboard() {
     setResumeError("");
     setResumeSuccess("");
 
-    const resumePath = `${seeker.user_id}/${Date.now()}.${extension}`;
+    const storedFileName = resumeFile.name.replace(/[\\/]/g, "_").trim();
+    const resumePath = `${seeker.user_id}/${Date.now()}-${storedFileName}`;
 
     try {
       const { error: uploadError } = await supabase.storage
@@ -756,36 +856,81 @@ export default function JobSeekerDashboard() {
     }
   };
 
-  const openResume = async () => {
+  const previewResume = async () => {
     if (!seeker?.resume_url || openingResume) return;
 
     setOpeningResume(true);
     setResumeError("");
+    setResumePreviewError("");
 
     try {
       const { data, error: signedUrlError } = await supabase.storage
         .from("Resume Files")
-        .createSignedUrl(seeker.resume_url, 60, { download: true });
+        .createSignedUrl(seeker.resume_url, 60);
 
       if (signedUrlError) throw signedUrlError;
 
-      const link = document.createElement("a");
-      link.href = data.signedUrl;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.click();
-    } catch (openError) {
-      console.error("Resume download error:", openError);
+      const fileName = getResumeFileName(seeker.resume_url);
+      const extension = getResumeExtension(fileName);
+      if (extension === "pdf") {
+        setResumePreview({ format: "pdf", url: data.signedUrl });
+      } else if (extension === "docx" || extension === "csv") {
+        const response = await fetch(data.signedUrl);
+        if (!response.ok) {
+          throw new Error("Unable to load your resume preview. Please try again.");
+        }
+        if (extension === "docx") {
+          setResumePreview({
+            format: "docx",
+            data: await response.arrayBuffer(),
+          });
+        } else {
+          setResumePreview({ format: "csv", content: await response.text() });
+        }
+      } else {
+        setResumePreview({ format: "unsupported", fileName });
+      }
+    } catch (previewError) {
+      console.error("Resume preview error:", previewError);
       setResumeError(
-        openError instanceof Error
-          ? openError.message
-          : "Unable to open your resume. Please try again.",
+        previewError instanceof Error
+          ? previewError.message
+          : "Unable to view your resume. Please try again.",
       );
     } finally {
       setOpeningResume(false);
     }
   };
 
+  const downloadResume = async () => {
+    if (!seeker?.resume_url || openingResume) return;
+
+    setOpeningResume(true);
+    setResumeError("");
+
+    try {
+      const fileName = getResumeFileName(seeker.resume_url);
+      const { data, error: signedUrlError } = await supabase.storage
+        .from("Resume Files")
+        .createSignedUrl(seeker.resume_url, 60, { download: fileName });
+
+      if (signedUrlError) throw signedUrlError;
+
+      const link = document.createElement("a");
+      link.href = data.signedUrl;
+      link.rel = "noopener noreferrer";
+      link.click();
+    } catch (downloadError) {
+      console.error("Resume download error:", downloadError);
+      setResumeError(
+        downloadError instanceof Error
+          ? downloadError.message
+          : "Unable to download your resume. Please try again.",
+      );
+    } finally {
+      setOpeningResume(false);
+    }
+  };
   // =====================================================
   // LOGOUT
   // =====================================================
@@ -872,8 +1017,16 @@ export default function JobSeekerDashboard() {
             />
 
             <div className="min-w-0">
-              <h2 className="truncate text-xl font-black text-[#123B70] sm:text-2xl">
-                {seeker.full_name || "Job Seeker"}
+              <h2 className="flex min-w-0 items-center gap-2 text-xl font-black text-[#123B70] sm:text-2xl">
+                <span className="truncate">{seeker.full_name || "Job Seeker"}</span>
+                {seeker.verification_status === "verified" && (
+                  <span
+                    title="Verified job seeker"
+                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"
+                  >
+                    <AppIcon name="check" className="h-3.5 w-3.5" />
+                  </span>
+                )}
               </h2>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-[#0759AE]">
@@ -908,14 +1061,15 @@ export default function JobSeekerDashboard() {
               <h2 id="peso-registration-title" className="mt-1 text-2xl font-black text-[#123B70]">
                 Job Seeker Registration Details
               </h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Complete your employment information for PESO screening and job applications.
-              </p>
             </div>
             <button
               type="button"
               onClick={() => {
-                if (screeningDetailsOpen && editingScreening) setEditingScreening(false);
+                if (screeningDetailsOpen && editingScreening) {
+                  setEditingScreening(false);
+                  setEditingResume(false);
+                  setResumeFile(null);
+                }
                 setScreeningDetailsOpen((open) => !open);
               }}
               aria-expanded={screeningDetailsOpen}
@@ -957,8 +1111,11 @@ export default function JobSeekerDashboard() {
               </span>
             </div>
             {incompleteTasks.length === 0 && (
-              <p role="status" className="mt-3 text-sm font-semibold text-emerald-700">
-                Your registration information is complete and ready for job applications.
+              <p
+                role="status"
+                className={`mt-3 rounded-xl border p-3 text-sm font-semibold ${getRegistrationReadinessClass(seeker.verification_status)}`}
+              >
+                {getRegistrationReadinessMessage(seeker.verification_status)}
               </p>
             )}
           </div>
@@ -1003,7 +1160,6 @@ export default function JobSeekerDashboard() {
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-xl font-black text-[#123B70]">PESO Screening Details</h2>
               <p className="mt-1 text-sm text-slate-500">
                 Review and update the information used for your employment profile.
               </p>
@@ -1105,6 +1261,11 @@ export default function JobSeekerDashboard() {
                             <div className="block text-xs font-bold uppercase tracking-wide text-slate-500">
                               {field.label}
                               {field.required && <span className="text-red-600"> *</span>}
+                              {field.hint && (
+                                <span className="mt-1 block text-xs font-normal normal-case tracking-normal text-slate-500">
+                                  {field.hint}
+                                </span>
+                              )}
                               {typeof rawValue === "string" &&
                                 rawValue.length > 0 &&
                                 !rawValue.startsWith("data:image/") && (
@@ -1227,14 +1388,17 @@ export default function JobSeekerDashboard() {
                             <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
                               {field.label}
                             </p>
+                            {field.hint && (
+                              <p className="mt-1 text-xs text-slate-500">
+                                {field.hint}
+                              </p>
+                            )}
                             {field.key === "signature" &&
                             typeof rawValue === "string" &&
-                            rawValue.startsWith("data:image/") ? (
-                              <img
-                                src={rawValue}
-                                alt="Saved e-signature"
-                                className="mt-2 max-h-32 max-w-full rounded-lg border border-slate-200 bg-white object-contain p-2"
-                              />
+                            rawValue.trim() ? (
+                              <p className="mt-2 text-sm font-medium text-slate-500">
+                                Hidden while not editing.
+                              </p>
                             ) : (
                               <p className="mt-2 break-words text-sm font-semibold text-slate-800">
                                 {displayValue}
@@ -1259,7 +1423,11 @@ export default function JobSeekerDashboard() {
             <div className="flex justify-end gap-3 border-t border-slate-100 px-6 py-5">
               <button
                 type="button"
-                onClick={() => setEditingScreening(false)}
+                onClick={() => {
+                  setEditingScreening(false);
+                  setEditingResume(false);
+                  setResumeFile(null);
+                }}
                 disabled={savingScreening}
                 className="rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
               >
@@ -1290,7 +1458,19 @@ export default function JobSeekerDashboard() {
                     <h3 className="text-base font-bold text-[#123B70]">Resume / CV</h3>
                     <p className="mt-1 text-xs text-slate-600">
                       {seeker.resume_url
-                        ? "Resume uploaded. Replace it with your latest version when needed."
+                        ? (
+                          <>
+                            Uploaded file:{" "}
+                            <button
+                              type="button"
+                              onClick={() => void previewResume()}
+                              disabled={openingResume}
+                              className="font-medium text-[#0759AE] underline decoration-[#0759AE]/50 underline-offset-2 hover:text-[#064A91] disabled:cursor-wait disabled:opacity-60"
+                            >
+                              {getResumeFileName(seeker.resume_url)}
+                            </button>
+                          </>
+                        )
                         : `Upload your updated resume (${RESUME_FORMATS_LABEL}, up to 5 MB).`}
                     </p>
                   </div>
@@ -1299,25 +1479,27 @@ export default function JobSeekerDashboard() {
                   {seeker.resume_url && (
                     <button
                       type="button"
-                      onClick={() => void openResume()}
+                      onClick={() => void downloadResume()}
                       disabled={openingResume}
                       className="inline-flex items-center gap-2 rounded-xl border border-blue-300 px-4 py-2.5 text-sm font-semibold text-[#0759AE] hover:bg-blue-50 disabled:opacity-50"
                     >
-                      {openingResume ? "Preparing..." : "View Resume"}
+                      {openingResume ? "Preparing..." : "Download"}
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingResume((editing) => !editing);
-                      setResumeError("");
-                      setResumeSuccess("");
-                    }}
-                    aria-expanded={editingResume}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#0759AE] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#064A91]"
-                  >
-                    {editingResume ? "Cancel" : seeker.resume_url ? "Replace Resume" : "Upload Resume"}
-                  </button>
+                  {editingScreening && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingResume((editing) => !editing);
+                        setResumeError("");
+                        setResumeSuccess("");
+                      }}
+                      aria-expanded={editingResume}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[#0759AE] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#064A91]"
+                    >
+                      {editingResume ? "Cancel" : seeker.resume_url ? "Replace Resume" : "Upload Resume"}
+                    </button>
+                  )}
                 </div>
               </div>
               {resumeError && (
@@ -1330,7 +1512,7 @@ export default function JobSeekerDashboard() {
                   {resumeSuccess}
                 </p>
               )}
-              {editingResume && (
+              {editingScreening && editingResume && (
                 <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
                   <p className="text-sm text-slate-500">
                     {seeker.resume_url
@@ -1364,6 +1546,68 @@ export default function JobSeekerDashboard() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {resumePreview && seeker.resume_url && (
+            <div
+              className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-3 sm:p-6"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) setResumePreview(null);
+              }}
+            >
+              <section
+                role="dialog"
+                aria-modal="true"
+                aria-label="Resume preview"
+                className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+              >
+                <header className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
+                  <h2 className="min-w-0 truncate font-bold text-[#123B70]">
+                    {resumePreview.format === "unsupported"
+                      ? resumePreview.fileName
+                      : getResumeFileName(seeker.resume_url)}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResumePreview(null);
+                      setResumePreviewError("");
+                    }}
+                    className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Close
+                  </button>
+                </header>
+                {resumePreviewError && (
+                  <p role="alert" className="m-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">
+                    {resumePreviewError}
+                  </p>
+                )}
+                {resumePreview.format === "pdf" && (
+                  <iframe
+                    title="Resume PDF preview"
+                    src={resumePreview.url}
+                    className="min-h-0 flex-1"
+                  />
+                )}
+                {resumePreview.format === "docx" && (
+                  <div className="min-h-0 flex-1 overflow-auto bg-slate-100 p-4 sm:p-8">
+                    <div ref={docxPreviewStyles} className="hidden" />
+                    <div ref={docxPreviewContainer} className="mx-auto max-w-full" />
+                  </div>
+                )}
+                {resumePreview.format === "csv" && (
+                  <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-5 text-sm text-slate-800">
+                    {resumePreview.content}
+                  </pre>
+                )}
+                {resumePreview.format === "unsupported" && (
+                  <p className="p-6 text-sm text-slate-700">
+                    This file format cannot be previewed in the browser. Use the Download button to open it.
+                  </p>
+                )}
+              </section>
             </div>
           )}
         </section>
@@ -1635,7 +1879,7 @@ export default function JobSeekerDashboard() {
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         onLogout={handleLogout}
-        hasUnreadMessages={notifications.length > 0}
+        hasUnreadMessages={unreadNotificationCount > 0}
       />
 
       {/* =================================================
@@ -1702,13 +1946,13 @@ export default function JobSeekerDashboard() {
                 type="button"
                 onClick={() => void openNotifications()}
                 className="relative flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100"
-                aria-label={`Notifications${notifications.length ? `, ${notifications.length} unread` : ""}`}
+                aria-label={`Notifications${unreadNotificationCount ? `, ${unreadNotificationCount} unread` : ""}`}
                 aria-haspopup="dialog"
                 aria-expanded={notificationsOpen}
               >
                 <AppIcon name="bell" className="h-5 w-5" />
 
-                {notifications.length > 0 && (
+                {unreadNotificationCount > 0 && (
                   <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500" />
                 )}
               </button>
@@ -1797,41 +2041,18 @@ export default function JobSeekerDashboard() {
               </button>
             </div>
           )}
-          {seeker?.verification_refresh_required && (
-            <div
-              role="alert"
-              className="mx-auto mb-6 flex max-w-7xl flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
-            >
-              <p>
-                Your account was automatically unverified because your screening
-                details need an update. Review and resubmit them so PESO can
-                verify your account again.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  handlePageChange("Profile");
-                  startScreeningEdit();
-                }}
-                className="shrink-0 rounded-lg bg-amber-800 px-3 py-2 font-bold text-white hover:bg-amber-900"
-              >
-                Update screening details
-              </button>
-            </div>
-          )}
           {seeker &&
-            !seeker.verification_refresh_required &&
-            seeker.verification_status === "pending" &&
+            activePage !== "Profile" &&
+            seeker.verification_status !== "verified" &&
             isJobSeekerProfileComplete(
               seeker.registration_details,
               seeker.resume_url,
             ) && (
               <p
                 role="status"
-                className="mx-auto mb-6 max-w-7xl rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900"
+                className={`mx-auto mb-6 max-w-7xl rounded-xl border p-4 text-sm ${getRegistrationReadinessClass(seeker.verification_status)}`}
               >
-                Your account is awaiting PESO verification. You can apply for
-                jobs again after PESO approves your updated details.
+                {getRegistrationReadinessMessage(seeker.verification_status)}
               </p>
             )}
           {renderContent()}
@@ -1899,26 +2120,42 @@ export default function JobSeekerDashboard() {
                   You’re all caught up
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  You have no unread notifications.
+                  There are no recent messages.
                 </p>
               </div>
             ) : (
-              <ul className="max-h-[min(60vh,32rem)] divide-y divide-slate-100 overflow-y-auto">
+              <ul className="max-h-[min(24.25rem,60vh)] divide-y divide-slate-100 overflow-y-auto">
                 {notifications.map((notification) => (
-                  <li key={notification.message_id}>
+                  <li key={notification.message_id} className="h-24">
                     <button
                       type="button"
                       onClick={() =>
                         void openNotificationConversation(notification)
                       }
-                      className="flex w-full items-start gap-3 px-5 py-4 text-left transition hover:bg-blue-50"
+                      aria-label={`${notification.read_at === null ? "Unread" : "Read"} notification from ${notification.sender_label}`}
+                      className={`flex h-full w-full items-start gap-3 px-5 py-4 text-left transition hover:bg-blue-50 ${
+                        notification.read_at === null ? "bg-blue-50" : "bg-white"
+                      }`}
                     >
-                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-600" />
+                      <span
+                        aria-hidden="true"
+                        className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                          notification.read_at === null
+                            ? "bg-blue-600"
+                            : "bg-transparent"
+                        }`}
+                      />
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-semibold text-slate-800">
+                        <span
+                          className={`block truncate text-sm ${
+                            notification.read_at === null
+                              ? "font-bold text-slate-800"
+                              : "font-medium text-slate-600"
+                          }`}
+                        >
                           {notification.sender_label}
                         </span>
-                        <span className="mt-1 block whitespace-pre-wrap break-words text-xs text-slate-600">
+                        <span className="mt-1 line-clamp-2 block whitespace-pre-wrap break-words text-xs text-slate-600">
                           {notification.body}
                         </span>
                         <span className="mt-2 block text-[10px] text-slate-400">

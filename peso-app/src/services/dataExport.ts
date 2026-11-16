@@ -1,4 +1,4 @@
-export type ExportFormat = "csv" | "docx" | "xlsx" | "pdf";
+ export type ExportFormat = "csv" | "docx" | "xlsx" | "pdf";
 export type ExportRow = Record<string, unknown> | unknown[];
 
 function cellText(value: unknown): string {

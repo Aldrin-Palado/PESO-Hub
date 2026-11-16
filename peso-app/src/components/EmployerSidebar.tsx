@@ -26,7 +26,6 @@ const menuItems: { name: EmployerMenuName }[] = [
   { name: "My Job Posts" },
   { name: "Applications" },
   { name: "Messages" },
-  { name: "Company Profile" },
 ];
 
 function EmployersSidebar({
@@ -133,6 +132,21 @@ function EmployersSidebar({
 
         {/* Logout */}
         <div className="border-t border-blue-100 p-4">
+          <button
+            type="button"
+            onClick={() => handleNavigation("Company Profile")}
+            aria-current={activeMenu === "Company Profile" ? "page" : undefined}
+            className={`mb-1 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition ${
+              activeMenu === "Company Profile"
+                ? "bg-blue-700 text-white shadow-sm"
+                : "text-gray-600 hover:bg-blue-50 hover:text-blue-700"
+            }`}
+          >
+            <span className="flex w-5 justify-center" aria-hidden="true">
+              <ModuleIcon module="Company Profile" />
+            </span>
+            Company Profile
+          </button>
           <button
             type="button"
             onClick={onSignOut}

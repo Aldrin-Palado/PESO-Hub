@@ -2,7 +2,7 @@ import {
   useCallback,
   useLayoutEffect,
   useRef,
-  type FormEventHandler,
+  type InputEventHandler,
   type TextareaHTMLAttributes,
 } from "react";
 
@@ -40,7 +40,7 @@ export default function AutoResizeTextarea({
     return () => window.removeEventListener("resize", resize);
   }, [resize]);
 
-  const handleInput: FormEventHandler<HTMLTextAreaElement> = (event) => {
+  const handleInput: InputEventHandler<HTMLTextAreaElement> = (event) => {
     onInput?.(event);
     resize();
   };

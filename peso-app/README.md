@@ -10,6 +10,32 @@
    npm run dev
    ```
 
+## Login CAPTCHA
+
+The login form uses Cloudflare Turnstile, which is the previous CAPTCHA used by
+this project. Set the public site key in the frontend environment before building:
+
+```env
+VITE_TURNSTILE_SITE_KEY=<Cloudflare Turnstile site key>
+```
+
+Configure these secrets in the Supabase project. The backend verifies each token
+against Cloudflare before requesting a Supabase password session.
+
+- `TURNSTILE_SECRET_KEY` (keep this server-side; never use a `VITE_` variable)
+
+Deploy the backend verifier after setting the secret:
+
+```sh
+supabase secrets set TURNSTILE_SECRET_KEY=<secret>
+supabase functions deploy captcha-auth
+```
+
+The function verifies tokens with Cloudflare before requesting a Supabase password
+session. Cloudflare Turnstile is not a native Supabase Auth CAPTCHA provider, so
+direct calls to Supabase's public password-grant endpoint do not pass through this
+function.
+
 ## Admin/staff audit logs
 
 Admin and staff changes to job posts, applications, employers, job seekers, staff

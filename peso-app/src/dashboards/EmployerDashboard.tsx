@@ -85,6 +85,7 @@ interface ApplicationRow {
   applicant_email?: string | null;
   applicant_contact_no?: string | null;
   applicant_address?: string | null;
+  applicant_resume_url?: string | null;
   applicant_user_id?: string | null;
   applicant_qualification_files?: { name: string; path: string }[] | null;
 }
@@ -157,7 +158,7 @@ async function loadEmployerApplications(
   const { data: applicationRows, error: applicationError } = await supabase
     .from("application")
     .select(
-      "application_id, employer_id, job_seeker_id, position_title, status, date_applied, applicant_name, applicant_email, applicant_contact_no, applicant_address, applicant_qualification_files",
+      "application_id, employer_id, job_seeker_id, position_title, status, date_applied, applicant_name, applicant_email, applicant_contact_no, applicant_address, applicant_resume_url, applicant_qualification_files",
     )
     .eq("employer_id", employerId)
     .order("date_applied", { ascending: false });
@@ -908,6 +909,7 @@ export default function EmployerDashboard() {
     website: profile.website,
     contact_person: profile.contact_person || "",
     company_logo_url: profile.logo_url,
+    is_verified: profile.is_verified,
   };
 
   /* =========================
@@ -946,7 +948,7 @@ export default function EmployerDashboard() {
 
       case "Company Profile":
         return (
-          <div className="space-y-8">
+          <div className="mx-auto max-w-5xl space-y-6 pb-8">
             <CompanyProfileModule
               profile={companyProfile}
               onSave={handleSaveCompanyProfile}
@@ -964,6 +966,7 @@ export default function EmployerDashboard() {
                 contact_no: profile.contact_no,
                 industry: profile.industry,
                 website: profile.website,
+                is_verified: profile.is_verified,
               }}
               registrationDetails={profile.registration_details}
               verificationDocuments={profile.verification_documents}

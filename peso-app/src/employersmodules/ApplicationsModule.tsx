@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { supabase } from "../services/supabase";
-import { openStoredResume } from "../services/resumes";
+import { getResumeFileName, openStoredResume } from "../services/resumes";
 import ProfileAvatar from "../components/ProfileAvatar";
 import FilterDropdown from "../components/FilterDropdown";
 import { getApplicationStatusStyles } from "../utils/applicationStatusStyles";
@@ -23,6 +23,7 @@ type ApplicationRow = {
   applicant_user_id?: string | null;
   contact_number?: string | null;
   applicant_address?: string | null;
+  applicant_resume_url?: string | null;
   applicant_qualification_files?: ApplicationDocument[] | null;
 };
 
@@ -37,9 +38,9 @@ const STATUSES = [
   { value: "shortlisted", label: "Shortlisted", color: getApplicationStatusStyles("shortlisted") },
   { value: "qualified", label: "Qualified", color: getApplicationStatusStyles("qualified") },
   { value: "interviewed", label: "Interviewed", color: getApplicationStatusStyles("interviewed") },
-  { value: "withdrawn", label: "Withdrawn", color: getApplicationStatusStyles("withdrawn") },
   { value: "hired", label: "You're Hired", color: getApplicationStatusStyles("hired") },
   { value: "rejected", label: "Rejected", color: getApplicationStatusStyles("rejected") },
+  { value: "withdrawn", label: "Withdrawn", color: getApplicationStatusStyles("withdrawn") },
 ];
 
 function normalizeApplicationStatus(value: string): string {
@@ -117,6 +118,12 @@ export default function ApplicationsModule({
   const [expandedApplicants, setExpandedApplicants] = useState<Set<string>>(
     () => new Set(),
   );
+  const selectedResume = selectedApplication?.applicant_resume_url
+    ? {
+        name: getResumeFileName(selectedApplication.applicant_resume_url),
+        path: selectedApplication.applicant_resume_url,
+      }
+    : null;
 
   const jobPostOptions = useMemo(
     () =>
@@ -585,6 +592,45 @@ export default function ApplicationsModule({
                   </div>
                 ))}
               </dl>
+
+              <section>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Attached resume
+                </h3>
+                {selectedResume ? (
+                  <div className="mt-3 flex flex-col gap-3 rounded-xl border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="min-w-0 break-all text-sm font-medium text-slate-700">
+                      {selectedResume.name}
+                    </span>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        disabled={openingDocumentPath === selectedResume.path}
+                        onClick={() => void handleOpenDocument(selectedResume)}
+                        className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 transition hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {openingDocumentPath === selectedResume.path
+                          ? "Opening..."
+                          : "View"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={downloadingDocumentPath === selectedResume.path}
+                        onClick={() => void handleDownloadDocument(selectedResume)}
+                        className="rounded-lg bg-blue-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {downloadingDocumentPath === selectedResume.path
+                          ? "Downloading..."
+                          : "Download"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-2 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+                    No resume was attached to this application.
+                  </p>
+                )}
+              </section>
 
               <section>
                 <h3 className="text-sm font-bold text-slate-900">

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import AuthSideImage from "./AuthSideImage";
 import PesoLogo from "./PesoLogo";
@@ -6,49 +7,96 @@ import { supabase } from "../services/supabase";
 import AppIcon from "./AppIcon";
 import Captcha from "./Captcha";
 
-const googleLogo = new URL("../assets/images/google.png", import.meta.url).href;
+const googleLogo = new URL(
+  "../assets/images/google.png",
+  import.meta.url
+).href;
+
+type AuthStep = "credentials" | "captcha";
+type AuthMethod = "password" | "google";
 
 function Login() {
   const navigate = useNavigate();
   const location = useLocation();
+
   const sessionExpired =
     location.state !== null &&
     typeof location.state === "object" &&
     "sessionExpired" in location.state &&
     location.state.sessionExpired === true;
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
   const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
+
+  const [authStep, setAuthStep] = useState<AuthStep>("credentials");
+  const [authMethod, setAuthMethod] = useState<AuthMethod>("password");
+
   const [captchaToken, setCaptchaToken] = useState("");
   const [captchaResetKey, setCaptchaResetKey] = useState(0);
-  const [captchaRequested, setCaptchaRequested] = useState(false);
-  const [captchaIntent, setCaptchaIntent] = useState<"password" | "google">("password");
-  const [oauthLoading, setOauthLoading] = useState(false);
-  const [oauthError, setOauthError] = useState("");
 
-  const signInWithGoogle = async () => {
-    if (loading || oauthLoading) return;
-    if (!captchaToken) {
-      setCaptchaIntent("google");
-      setCaptchaRequested(true);
-      return;
-    }
-    setOauthError("");
-    setOauthLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
-    if (error) {
-      setOauthError(error.message);
-      setCaptchaToken("");
-      setCaptchaResetKey((current) => current + 1);
-      setOauthLoading(false);
-    }
+  const [error, setError] = useState("");
+
+  const authInProgressRef = useRef(false);
+  const lastSubmittedCaptchaTokenRef = useRef("");
+
+  // Reset CAPTCHA and invalidate previous token.
+  const resetCaptcha = () => {
+    lastSubmittedCaptchaTokenRef.current = "";
+    setCaptchaToken("");
+    setCaptchaResetKey((current) => current + 1);
   };
 
+  // Display CAPTCHA after choosing an authentication method.
+  const showCaptcha = (method: AuthMethod) => {
+    if (loading || oauthLoading || authInProgressRef.current) return;
+
+    setAuthMethod(method);
+    setError("");
+    resetCaptcha();
+    setAuthStep("captcha");
+  };
+
+  // Extract Supabase Edge Function error.
+  const getErrorMessage = async (
+    loginError: {
+      message: string;
+      context?: unknown;
+    }
+  ) => {
+    let message = loginError.message;
+
+    if (loginError.context instanceof Response) {
+      try {
+        const responseBody: unknown =
+          await loginError.context.clone().json();
+
+        if (
+          responseBody &&
+          typeof responseBody === "object" &&
+          "error" in responseBody &&
+          typeof responseBody.error === "string"
+        ) {
+          message = responseBody.error;
+        }
+      } catch {
+        // Retain original error.
+      }
+    }
+
+    if (message === "Invalid login credentials") {
+      return "Invalid email or password. Please check your credentials.";
+    }
+
+    return message;
+  };
+
+  // Role-based navigation.
   const routeAuthenticatedUser = async (user: { id: string }) => {
+    // Superadmin
     const { data: admin, error: adminError } = await supabase
       .from("peso_admin")
       .select("admin_id, user_id, full_name, email, is_active")
@@ -57,7 +105,9 @@ function Login() {
 
     if (adminError) {
       console.error("Admin profile lookup error:", adminError);
-      throw new Error("Your login was accepted, but we could not verify the Admin profile. Check database permissions and try again.");
+      throw new Error(
+        "Your login was accepted, but we could not verify your Admin profile."
+      );
     }
 
     if (admin) {
@@ -67,10 +117,12 @@ function Login() {
         navigate("/", { replace: true });
         return;
       }
+
       navigate("/superadmin", { replace: true });
       return;
     }
 
+    // Staff
     const { data: staff, error: staffError } = await supabase
       .from("peso_staff")
       .select("peso_staff_id, user_id, full_name, email, is_active")
@@ -79,7 +131,9 @@ function Login() {
 
     if (staffError) {
       console.error("Staff profile lookup error:", staffError);
-      throw new Error("Your login was accepted, but we could not verify the Staff profile. Please try again.");
+      throw new Error(
+        "Your login was accepted, but we could not verify your Staff profile."
+      );
     }
 
     if (staff) {
@@ -89,10 +143,12 @@ function Login() {
         navigate("/", { replace: true });
         return;
       }
+
       navigate("/superadmin", { replace: true });
       return;
     }
 
+    // Job Seeker
     const { data: jobSeeker, error: jobSeekerError } = await supabase
       .from("job_seeker")
       .select("job_seeker_id, user_id, full_name, email, is_active")
@@ -101,7 +157,9 @@ function Login() {
 
     if (jobSeekerError) {
       console.error("Job Seeker profile lookup error:", jobSeekerError);
-      throw new Error("Your login was accepted, but we could not verify the Job Seeker profile. Please try again.");
+      throw new Error(
+        "Your login was accepted, but we could not verify your Job Seeker profile."
+      );
     }
 
     if (jobSeeker) {
@@ -111,7 +169,9 @@ function Login() {
         navigate("/", { replace: true });
         return;
       }
+
       const state = location.state;
+
       const returnToPath =
         state &&
         typeof state === "object" &&
@@ -119,15 +179,18 @@ function Login() {
         typeof state.returnTo === "string"
           ? state.returnTo
           : "";
+
       const returnTo =
         returnToPath.startsWith("/jobs") ||
         /^\/jobseeker\?job=[0-9a-f-]{36}$/i.test(returnToPath)
           ? returnToPath
           : "/jobseeker";
+
       navigate(returnTo, { replace: true });
       return;
     }
 
+    // Employer
     const { data: employer, error: employerError } = await supabase
       .from("employer")
       .select("employer_id, user_id, name, email, is_verified")
@@ -136,7 +199,9 @@ function Login() {
 
     if (employerError) {
       console.error("Employer profile lookup error:", employerError);
-      throw new Error("Your login was accepted, but we could not verify the Employer profile. Please try again.");
+      throw new Error(
+        "Your login was accepted, but we could not verify your Employer profile."
+      );
     }
 
     if (employer) {
@@ -145,10 +210,15 @@ function Login() {
     }
 
     await supabase.auth.signOut();
-    alert("Your account is authenticated, but no PESO profile was found. Please contact the Admin.");
+
+    alert(
+      "Your account is authenticated, but no PESO profile was found. Please contact the Admin."
+    );
+
     navigate("/", { replace: true });
   };
 
+  // Check existing session and OAuth authentication.
   useEffect(() => {
     let isMounted = true;
 
@@ -157,14 +227,12 @@ function Login() {
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (!isMounted || !session?.user) {
-        return;
-      }
+      if (!isMounted || !session?.user) return;
 
       try {
         await routeAuthenticatedUser(session.user);
-      } catch (error) {
-        console.error("Session redirect error:", error);
+      } catch (err) {
+        console.error("Session redirect error:", err);
         await supabase.auth.signOut();
       }
     };
@@ -174,9 +242,20 @@ function Login() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session?.user) {
-        void routeAuthenticatedUser(session.user).catch(async () => {
-          await supabase.auth.signOut();
+      if (
+        event === "SIGNED_IN" &&
+        session?.user &&
+        !authInProgressRef.current
+      ) {
+        void Promise.resolve().then(async () => {
+          if (!isMounted || authInProgressRef.current) return;
+
+          try {
+            await routeAuthenticatedUser(session.user);
+          } catch (err) {
+            console.error("Authentication redirect error:", err);
+            await supabase.auth.signOut();
+          }
         });
       }
     });
@@ -187,74 +266,212 @@ function Login() {
     };
   }, [navigate, location.state]);
 
-  const handleLogin = async (e?: React.FormEvent<HTMLFormElement>) => {
+  // Email and password authentication.
+  const handleLogin = async (
+    e?: React.FormEvent<HTMLFormElement>,
+    verifiedCaptchaToken = captchaToken,
+  ) => {
     e?.preventDefault();
-    if (loading) return;
-    if (!captchaToken) {
-      setCaptchaIntent("password");
-      setCaptchaRequested(true);
+
+    if (authInProgressRef.current || loading || oauthLoading) return;
+
+    // Validate credentials before allowing the password flow to continue to CAPTCHA.
+    if (authStep === "credentials") {
+      if (!email.trim() || !password) {
+        setError("Please enter your email and password.");
+        return;
+      }
+
+      authInProgressRef.current = true;
+      setLoading(true);
+      setError("");
+
+      try {
+        const { data, error: validationError } =
+          await supabase.functions.invoke<{ valid?: boolean }>("captcha-auth", {
+            body: {
+              mode: "validate",
+              email: email.trim(),
+              password,
+            },
+          });
+
+        if (validationError) {
+          throw new Error(await getErrorMessage(validationError));
+        }
+        if (!data?.valid) {
+          throw new Error("Unable to validate credentials. Please try again.");
+        }
+
+        setAuthMethod("password");
+        resetCaptcha();
+        setAuthStep("captcha");
+      } catch (validationError) {
+        console.error("Login credential validation error:", validationError);
+        setError(
+          validationError instanceof Error
+            ? validationError.message
+            : "Unable to validate your credentials. Please try again.",
+        );
+      } finally {
+        setLoading(false);
+        authInProgressRef.current = false;
+      }
       return;
     }
+
+    if (authMethod !== "password") return;
+
+    if (!verifiedCaptchaToken) {
+      setError("Please complete the CAPTCHA verification.");
+      return;
+    }
+
+    if (lastSubmittedCaptchaTokenRef.current === verifiedCaptchaToken) return;
+
+    const submittedToken = verifiedCaptchaToken;
+
+    authInProgressRef.current = true;
+    lastSubmittedCaptchaTokenRef.current = submittedToken;
+
+    setCaptchaToken("");
+    setError("");
     setLoading(true);
 
     try {
-      const {
-        data: { user },
-        error: loginError,
-      } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-        options: { captchaToken },
-      });
+      // Verify CAPTCHA and authenticate through Edge Function.
+      const { data, error: loginError } =
+        await supabase.functions.invoke<{
+          access_token?: string;
+          refresh_token?: string;
+        }>("captcha-auth", {
+          body: {
+            mode: "password",
+            email: email.trim(),
+            password,
+            captchaToken: submittedToken,
+          },
+        });
 
       if (loginError) {
-        alert(
-          loginError.message === "Invalid login credentials"
-            ? "Invalid email or password. Check that the account exists in this Supabase project and that the password is correct."
-            : loginError.message
+        throw new Error(await getErrorMessage(loginError));
+      }
+
+      if (!data?.access_token || !data?.refresh_token) {
+        throw new Error(
+          "Sign in failed. Supabase did not return a valid session."
         );
-        return;
       }
 
-      if (!user) {
-        alert("Login failed. Supabase did not return a user.");
-        return;
+      // Establish Supabase session.
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        });
+
+      if (sessionError) throw sessionError;
+
+      if (!sessionData.user) {
+        throw new Error("Supabase did not return an authenticated user.");
       }
 
-      await routeAuthenticatedUser(user);
-    } catch (error) {
-      console.error("Login error:", error);
-      const message = error instanceof Error
-        ? error.message
-        : "Something went wrong while logging in. Please try again.";
+      // Redirect according to account role.
+      await routeAuthenticatedUser(sessionData.user);
+
+    } catch (err) {
+      console.error("Login error:", err);
+
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while logging in. Please try again.";
+
+      setError(message);
+
       await supabase.auth.signOut();
-      alert(message);
-      navigate("/", { replace: true });
+
     } finally {
-      setCaptchaToken("");
-      setCaptchaResetKey((current) => current + 1);
-      setCaptchaRequested(false);
+      resetCaptcha();
       setLoading(false);
+      authInProgressRef.current = false;
     }
   };
 
-  const continueAfterCaptcha = () => {
-    if (!captchaToken || loading || oauthLoading) return;
-    if (captchaIntent === "google") {
-      void signInWithGoogle();
+  // Google OAuth after CAPTCHA verification.
+  const signInWithGoogle = async (verifiedCaptchaToken = captchaToken) => {
+    if (authInProgressRef.current || loading || oauthLoading) return;
+
+    if (!verifiedCaptchaToken) {
+      setError("Please complete the CAPTCHA verification.");
       return;
     }
 
-    void handleLogin();
+    if (lastSubmittedCaptchaTokenRef.current === verifiedCaptchaToken) return;
+
+    const submittedToken = verifiedCaptchaToken;
+
+    authInProgressRef.current = true;
+    lastSubmittedCaptchaTokenRef.current = submittedToken;
+
+    setCaptchaToken("");
+    setError("");
+    setOauthLoading(true);
+
+    try {
+      // Verify CAPTCHA before initiating Google OAuth.
+      const { error: captchaError } = await supabase.functions.invoke(
+        "captcha-auth",
+        {
+          body: {
+            mode: "verify",
+            captchaToken: submittedToken,
+          },
+        }
+      );
+
+      if (captchaError) {
+        throw new Error(await getErrorMessage(captchaError));
+      }
+
+      // Initiate Google OAuth.
+      const { error: oauthError } =
+        await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: `${window.location.origin}/auth/callback`,
+          },
+        });
+
+      if (oauthError) throw oauthError;
+
+      // Browser redirects to Google.
+
+    } catch (err) {
+      console.error("Google OAuth error:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to sign in with Google. Please try again."
+      );
+
+      resetCaptcha();
+      setOauthLoading(false);
+      authInProgressRef.current = false;
+    }
   };
 
   return (
     <div className="whirl-page-background min-h-screen">
       <main className="grid min-h-screen lg:grid-cols-2">
+
         <AuthSideImage />
 
         <section className="flex min-h-[calc(100dvh-19rem)] flex-col justify-center bg-white/85 px-5 py-10 backdrop-blur-sm sm:px-10 lg:min-h-screen lg:px-12 xl:px-20">
+
           <div className="mx-auto w-full max-w-[33rem]">
+
             <PesoLogo
               size="auth"
               showName
@@ -262,180 +479,268 @@ function Login() {
               className="mb-8"
             />
 
+            {/* Page heading */}
             <div className="mb-8">
               <h2 className="mt-2 text-3xl font-semibold tracking-tight text-[#102A4C] sm:text-4xl">
-                {captchaRequested ? "Verify your sign in" : "Sign in"}
+                {authStep === "credentials"
+                  ? "Sign in"
+                  : "Verify you're human"}
               </h2>
+
               <p className="mt-3 text-sm leading-6 text-slate-500 sm:text-base">
-                {captchaRequested
-                  ? "Complete the CAPTCHA to continue."
-                  : "Access your PESO MABINI account to continue."}
+                {authStep === "credentials"
+                  ? "Access your PESO MABINI account to continue."
+                  : "Complete the security verification below before continuing."}
               </p>
             </div>
 
-            {captchaRequested ? (
-              <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <Captcha
-                  onVerify={setCaptchaToken}
-                  resetKey={captchaResetKey}
-                  className="flex flex-col items-center"
-                />
-                <button
-                  type="button"
-                  onClick={continueAfterCaptcha}
-                  disabled={!captchaToken || loading || oauthLoading}
-                  className="w-full rounded-2xl bg-[#315FEA] px-5 py-4 text-base font-semibold text-white shadow-[0_12px_24px_-12px_rgba(49,95,234,0.75)] transition hover:bg-[#244FD4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {loading
-                    ? "Signing In..."
-                    : oauthLoading
-                      ? "Opening Google..."
-                      : captchaIntent === "google"
-                        ? "Continue with Google"
-                        : "Continue to Sign In"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCaptchaRequested(false);
-                    setCaptchaToken("");
-                    setCaptchaResetKey((current) => current + 1);
-                    setOauthError("");
-                  }}
-                  disabled={loading || oauthLoading}
-                  className="w-full text-sm font-semibold text-slate-600 transition hover:text-[#315FEA] disabled:opacity-60"
-                >
-                  Back to sign in
-                </button>
-              </div>
-            ) : (
-              <>
+            {/* Session expiration notice */}
             {sessionExpired && (
               <p
                 role="status"
                 className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900"
               >
-                Your session expired after 30 minutes of inactivity. Please sign
-                in again.
+                Your session expired after 30 minutes of inactivity.
+                Please sign in again.
               </p>
             )}
 
             <form onSubmit={handleLogin} className="space-y-5">
-              <div>
-                <label
-                  htmlFor="login-email"
-                  className="mb-2 block text-sm font-medium text-slate-800"
-                >
-                  Email address
-                </label>
-                <input
-                  id="login-email"
-                  type="email"
-                  autoComplete="username"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="Enter your email"
-                  required
-                  disabled={loading}
-                  className="w-full rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#315FEA] focus:ring-4 focus:ring-[#315FEA]/10 disabled:bg-slate-100"
-                />
-              </div>
 
-              <div>
-                <label
-                  htmlFor="login-password"
-                  className="mb-2 block text-sm font-medium text-slate-800"
-                >
-                  Password
-                </label>
+              {authStep === "credentials" ? (
+                <>
+                  {/* Email */}
+                  <div>
+                    <label
+                      htmlFor="login-email"
+                      className="mb-2 block text-sm font-medium text-slate-800"
+                    >
+                      Email address
+                    </label>
 
-                <div className="relative">
-                  <input
-                    id="login-password"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="Enter your password"
-                    required
-                    disabled={loading}
-                    className="w-full rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 pr-20 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#315FEA] focus:ring-4 focus:ring-[#315FEA]/10 disabled:bg-slate-100"
-                  />
+                    <input
+                      id="login-email"
+                      type="email"
+                      autoComplete="username"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      placeholder="Enter your email"
+                      required
+                      disabled={loading || oauthLoading}
+                      className="w-full rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#315FEA] focus:ring-4 focus:ring-[#315FEA]/10 disabled:bg-slate-100"
+                    />
+                  </div>
+
+                  {/* Password */}
+                  <div>
+                    <label
+                      htmlFor="login-password"
+                      className="mb-2 block text-sm font-medium text-slate-800"
+                    >
+                      Password
+                    </label>
+
+                    <div className="relative">
+                      <input
+                        id="login-password"
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        placeholder="Enter your password"
+                        required
+                        disabled={loading || oauthLoading}
+                        className="w-full rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 pr-20 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#315FEA] focus:ring-4 focus:ring-[#315FEA]/10 disabled:bg-slate-100"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((current) => !current)}
+                        disabled={loading || oauthLoading}
+                        className="absolute right-5 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500 transition hover:text-[#315FEA]"
+                      >
+                        {showPassword ? "Hide" : "Show"}
+                      </button>
+                    </div>
+
+                    <div className="mt-2 text-right">
+                      <Link
+                        to="/forgot-password"
+                        className="text-sm font-medium text-[#315FEA] transition hover:text-[#123B70]"
+                      >
+                        Forgot Password?
+                      </Link>
+                    </div>
+                  </div>
+
+                  {/* Remember me */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="remember"
+                      className="h-4 w-4 rounded border-slate-300 accent-[#315FEA] focus:ring-[#315FEA]"
+                    />
+
+                    <label
+                      htmlFor="remember"
+                      className="text-sm text-slate-600"
+                    >
+                      Keep me signed in
+                    </label>
+                  </div>
+
+                  {/* Continue */}
+                  <button
+                    type="submit"
+                    disabled={loading || oauthLoading}
+                    className="w-full rounded-2xl bg-[#315FEA] px-5 py-4 text-base font-semibold text-white shadow-[0_12px_24px_-12px_rgba(49,95,234,0.75)] transition hover:bg-[#244FD4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {loading ? "Checking credentials..." : "Continue"}
+                  </button>
+
+                  {/* Login error */}
+                  {error && (
+                    <p role="alert" className="text-sm text-red-700">
+                      {error}
+                    </p>
+                  )}
+
+                  {/* Divider */}
+                  <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <span className="h-px flex-1 bg-slate-200" />
+                    Or
+                    <span className="h-px flex-1 bg-slate-200" />
+                  </div>
+
+                  {/* Google OAuth */}
                   <button
                     type="button"
-                    onClick={() => setShowPassword((current) => !current)}
-                    disabled={loading}
-                    className="absolute right-5 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500 transition hover:text-[#315FEA]"
+                    onClick={() => showCaptcha("google")}
+                    disabled={loading || oauthLoading}
+                    className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 text-base font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
                   >
-                    {showPassword ? "Hide" : "Show"}
+                    <img
+                      src={googleLogo}
+                      alt=""
+                      aria-hidden="true"
+                      className="h-9 w-9 object-contain"
+                    />
+
+                    Continue with Google
                   </button>
-                </div>
+                </>
+              ) : (
+                <>
+                  {/* CAPTCHA verification */}
+                  <div className="rounded-2xl border border-[#D5DEEB] bg-white p-5 sm:p-7">
 
-                <div className="mt-2 text-right">
-                  <Link
-                    to="/forgot-password"
-                    className="text-sm font-medium text-[#315FEA] transition hover:text-[#123B70]"
-                  >
-                    Forgot Password?
-                  </Link>
-                </div>
-              </div>
+                    <div className="mb-5 text-center">
+                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50">
+                        <AppIcon
+                          name="shieldCheck"
+                          className="h-6 w-6 text-[#315FEA]"
+                        />
+                      </div>
 
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="remember"
-                  className="h-4 w-4 rounded border-slate-300 accent-[#315FEA] focus:ring-[#315FEA]"
-                />
-                <label htmlFor="remember" className="text-sm text-slate-600">
-                  Keep me signed in
-                </label>
-              </div>
+                      <h3 className="text-lg font-semibold text-[#102A4C]">
+                        Security Verification
+                      </h3>
 
-              <button
-                type="submit"
-                disabled={loading || oauthLoading}
-                className="w-full rounded-2xl bg-[#315FEA] px-5 py-4 text-base font-semibold text-white shadow-[0_12px_24px_-12px_rgba(49,95,234,0.75)] transition hover:bg-[#244FD4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loading ? "Signing In..." : "Sign In"}
-              </button>
+                      <p className="mt-2 text-sm leading-6 text-slate-500">
+                        Please confirm that you are human to securely
+                        continue to your PESO-Hub account.
+                      </p>
+                    </div>
 
-              {oauthError && (
-                <p role="alert" className="text-sm text-red-700">{oauthError}</p>
+                    <Captcha
+                      onVerify={(token) => {
+                        setCaptchaToken(token);
+                        if (token) {
+                          setError("");
+                          if (authMethod === "google") {
+                            void signInWithGoogle(token);
+                          } else {
+                            void handleLogin(undefined, token);
+                          }
+                        }
+                      }}
+                      onExpire={() => {
+                        setCaptchaToken("");
+                        setError(
+                          "Your CAPTCHA has expired. Please verify again."
+                        );
+                      }}
+                      onError={() => {
+                        // Captcha.tsx displays its own loading error.
+                        // Do not display a second generic error here.
+                        setCaptchaToken("");
+                      }}
+                      resetKey={captchaResetKey}
+                      theme="light"
+                      size="normal"
+                      className="flex justify-center"
+                    />
+
+                  </div>
+
+                  {/* Authentication error */}
+                  {error && (
+                    <p
+                      role="alert"
+                      className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+                    >
+                      {error}
+                    </p>
+                  )}
+
+                  {/* Continue automatically after CAPTCHA verification. */}
+                  {authMethod === "password" ? (
+                    <p
+                      role="status"
+                      className="text-center text-sm font-medium text-slate-600"
+                    >
+                      {loading
+                        ? "Signing you in..."
+                        : "Complete the CAPTCHA to sign in automatically."}
+                    </p>
+                  ) : (
+                    <p
+                      role="status"
+                      className="text-center text-sm font-medium text-slate-600"
+                    >
+                      {oauthLoading
+                        ? "Opening Google..."
+                        : "Complete the CAPTCHA to continue with Google automatically."}
+                    </p>
+                  )}
+
+                </>
               )}
-              <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                <span className="h-px flex-1 bg-slate-200" />
-                Or
-                <span className="h-px flex-1 bg-slate-200" />
-              </div>
-              <button
-                type="button"
-                onClick={() => void signInWithGoogle()}
-                disabled={loading || oauthLoading}
-                className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 text-base font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
-              >
-                <img src={googleLogo} alt="" aria-hidden="true" className="h-9 w-9 object-contain" />
-                {oauthLoading ? "Opening Google..." : "Continue with Google"}
-              </button>
 
             </form>
 
-            <div className="mt-8 pt-2 text-center">
-              <p className="text-sm text-slate-500">
-                Don’t have an account?{" "}
-                <Link
-                  to="/register"
-                  className="font-semibold text-[#315FEA] underline decoration-[#315FEA]/40 underline-offset-4 transition hover:text-[#123B70]"
-                >
-                  Create an account
-                </Link>
-              </p>
-            </div>
+            {/* Registration */}
+            {authStep === "credentials" && (
+              <div className="mt-8 pt-2 text-center">
+                <p className="text-sm text-slate-500">
+                  Don’t have an account?{" "}
+
+                  <Link
+                    to="/register"
+                    className="font-semibold text-[#315FEA] underline decoration-[#315FEA]/40 underline-offset-4 transition hover:text-[#123B70]"
+                  >
+                    Create an account
+                  </Link>
+                </p>
+              </div>
+            )}
 
             <p className="mt-4 text-center text-xs leading-5 text-slate-500">
-              Your information is protected and used only to provide employment
-              services.
+              Your information is protected and used only to provide
+              employment services.
             </p>
+
+            {/* Return to Home */}
             <Link
               to="/"
               className="mx-auto mt-5 inline-flex items-center justify-center gap-2 rounded-full border border-[#D5DEEB] bg-white px-6 py-3 text-sm font-semibold text-[#3156A2] shadow-sm transition hover:border-[#315FEA]/40 hover:text-[#244FD4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA]"
@@ -443,8 +748,7 @@ function Login() {
               <AppIcon name="arrowLeft" className="h-4 w-4" />
               Return to Home
             </Link>
-              </>
-            )}
+
           </div>
         </section>
       </main>

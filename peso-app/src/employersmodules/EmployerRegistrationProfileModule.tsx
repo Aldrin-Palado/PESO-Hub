@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import ESignatureInput from "../components/ESignatureInput";
 import AutoResizeTextarea from "../components/AutoResizeTextarea";
+import AppIcon from "../components/AppIcon";
 import VerificationDocumentsModule from "./VerificationDocumentsModule";
 import {
   employerDocumentRequirements,
@@ -52,6 +53,7 @@ type EmployerProfile = {
   contact_no: string | null;
   industry: string | null;
   website: string | null;
+  is_verified?: boolean;
 };
 
 type Props = {
@@ -164,6 +166,15 @@ const inputClass =
 const labelClass = "block text-sm font-semibold text-slate-700";
 const required = <span className="text-red-600"> *</span>;
 
+const registrationSections = [
+  { id: "employer-registration-basic-profile", label: "I. Basic Company Profile", checklistLabel: "Basic company profile" },
+  { id: "employer-registration-establishment", label: "II. Establishment Information", checklistLabel: "Establishment information" },
+  { id: "employer-registration-employment", label: "III. Employment Information", checklistLabel: "Employment information" },
+  { id: "employer-registration-contact", label: "IV. Contact Details", checklistLabel: "Contact details" },
+  { id: "employer-registration-certification", label: "V. Certification and Consent", checklistLabel: "Certification and consent" },
+  { id: "employer-registration-paperwork", label: "VI. Required Paperwork", checklistLabel: "Required paperwork" },
+];
+
 export default function EmployerRegistrationProfileModule({
   profile,
   registrationDetails,
@@ -183,6 +194,7 @@ export default function EmployerRegistrationProfileModule({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [registrationDetailsOpen, setRegistrationDetailsOpen] = useState(false);
+  const [sectionToFocus, setSectionToFocus] = useState<string | null>(null);
 
   useEffect(() => {
     if (isEditing) return;
@@ -205,6 +217,19 @@ export default function EmployerRegistrationProfileModule({
       setRegistrationDetailsOpen(true);
     }
   }, [isEditing]);
+
+  useEffect(() => {
+    if (!registrationDetailsOpen || !sectionToFocus) return;
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      document
+        .getElementById(sectionToFocus)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setSectionToFocus(null);
+    });
+
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [registrationDetailsOpen, sectionToFocus]);
 
   const savedDetails = asRecord(registrationDetails);
   const registrationChecklist = getEmployerRegistrationChecklist(
@@ -231,6 +256,16 @@ export default function EmployerRegistrationProfileModule({
   const completedRegistrationSteps = registrationChecklist.filter(
     (item) => item.complete,
   ).length;
+  const completionPercentage = Math.round(
+    (completedRegistrationSteps / registrationChecklist.length) * 100,
+  );
+  const registrationComplete =
+    completedRegistrationSteps === registrationChecklist.length;
+
+  const openRegistrationSection = (sectionId: string) => {
+    setSectionToFocus(sectionId);
+    setRegistrationDetailsOpen(true);
+  };
 
   const update = (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = event.target;
@@ -366,7 +401,7 @@ export default function EmployerRegistrationProfileModule({
   };
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-5">
       <header>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -376,9 +411,6 @@ export default function EmployerRegistrationProfileModule({
             <h2 className="mt-1 text-2xl font-black text-[#123B70]">
               Employer Registration Details
             </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              Complete your PESO registration and submit the required paperwork.
-            </p>
           </div>
           <button
             type="button"
@@ -387,42 +419,91 @@ export default function EmployerRegistrationProfileModule({
             aria-controls="employer-registration-details"
             className="shrink-0 rounded-xl border border-blue-200 px-4 py-2.5 text-sm font-bold text-[#0759AE] transition hover:bg-blue-50"
           >
-            {registrationDetailsOpen
-              ? "Hide PESO Details"
-              : "Show PESO Details"}
+            {registrationDetailsOpen ? "Hide PESO Details" : "View PESO Details"}
           </button>
         </div>
       </header>
 
-      <section className="rounded-2xl border border-blue-100 bg-blue-50 p-4 sm:p-5">
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="text-sm font-bold text-[#123B70]">Registration progress</h3>
+            <h3 className="text-base font-bold text-[#123B70]">Registration Progress</h3>
             <p className="mt-1 text-xs text-slate-600">
-              Complete all sections and upload the required paperwork for PESO review.
+              Complete all sections and submit the required paperwork for PESO review.
             </p>
           </div>
-          <span className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-[#123B70]">
-            {completedRegistrationSteps}/{registrationChecklist.length} complete
+          <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-[#0759AE]">
+            {completedRegistrationSteps}/{registrationChecklist.length} Complete
           </span>
         </div>
-        {registrationDetailsOpen && (
-          <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {registrationChecklist.map((item) => (
-              <li
-                key={item.label}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium ${
-                  item.complete
-                    ? "bg-emerald-100 text-emerald-800"
-                    : "bg-white text-slate-600"
-                }`}
-              >
-                <span aria-hidden="true">{item.complete ? "✓" : "○"}</span>
-                {item.label}
-              </li>
-            ))}
-          </ul>
+        <div className="mt-3 flex items-center gap-3">
+          <div
+            role="progressbar"
+            aria-label="Employer registration completion"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={completionPercentage}
+            className="h-3 flex-1 overflow-hidden rounded-full bg-blue-100"
+          >
+            <div
+              className="h-full rounded-full bg-[#0759AE] transition-all duration-300"
+              style={{ width: `${completionPercentage}%` }}
+            />
+          </div>
+          <span className="min-w-12 text-right text-lg font-black text-[#123B70]">
+            {completionPercentage}%
+          </span>
+        </div>
+        {registrationComplete && (
+          <p
+            role="status"
+            className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800"
+          >
+            {profile.is_verified
+              ? "Your registration is complete and verified. Your account is ready to post jobs."
+              : "Your registration is complete and ready for PESO review."}
+          </p>
         )}
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <h3 className="text-base font-bold text-[#123B70]">Registration Sections</h3>
+        <p className="mt-1 text-xs text-slate-600">
+          Click a section to review or update your information.
+        </p>
+        <div className="mt-3 grid gap-2 md:grid-flow-col md:grid-cols-2 md:grid-rows-3">
+          {registrationSections.map((section) => {
+            const complete = registrationChecklist.find(
+              (item) => item.label === section.checklistLabel,
+            )?.complete ?? false;
+
+            return (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => openRegistrationSection(section.id)}
+                aria-label={`Open ${section.label}`}
+                className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 px-3 py-2.5 text-left text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50"
+              >
+                {complete ? (
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+                    <AppIcon name="check" className="h-3 w-3" />
+                  </span>
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="h-4 w-4 shrink-0 rounded-full border-2 border-slate-400"
+                  />
+                )}
+                <span className="min-w-0 flex-1">{section.label}</span>
+                <AppIcon
+                  name="chevronRight"
+                  className="h-4 w-4 shrink-0 text-[#123B70]"
+                />
+              </button>
+            );
+          })}
+        </div>
       </section>
 
       {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
@@ -435,12 +516,36 @@ export default function EmployerRegistrationProfileModule({
         className="space-y-6"
       >
         <fieldset disabled={!isEditing || saving} className="space-y-6 border-0 p-0">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <h3 className="font-bold text-slate-900">Establishment Information</h3>
+        <section
+          id="employer-registration-basic-profile"
+          className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+        >
+          <h3 className="font-bold text-slate-900">Basic Company Profile</h3>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className={labelClass}>Name of Establishment
               <input value={profile.name} readOnly className={`${inputClass} bg-slate-50`} />
             </label>
+            <label className={labelClass}>Company Email
+              <input value={profile.email ?? ""} placeholder="Not provided" readOnly className={`${inputClass} bg-slate-50`} />
+            </label>
+            <label className={labelClass}>Contact Person
+              <input value={profile.contact_person ?? ""} placeholder="Not provided" readOnly className={`${inputClass} bg-slate-50`} />
+            </label>
+            <label className={labelClass}>Contact Number
+              <input value={profile.contact_no ?? ""} placeholder="Not provided" readOnly className={`${inputClass} bg-slate-50`} />
+            </label>
+            <label className={`${labelClass} sm:col-span-2`}>Company Address
+              <input value={profile.address ?? ""} placeholder="Not provided" readOnly className={`${inputClass} bg-slate-50`} />
+            </label>
+          </div>
+        </section>
+
+        <section
+          id="employer-registration-establishment"
+          className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+        >
+          <h3 className="font-bold text-slate-900">Establishment Information</h3>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className={labelClass}>Acronym{required}
               <input name="acronym" value={form.acronym} onChange={update} required className={inputClass} />
             </label>
@@ -503,7 +608,10 @@ export default function EmployerRegistrationProfileModule({
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section
+          id="employer-registration-employment"
+          className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+        >
           <h3 className="font-bold text-slate-900">Employment Information</h3>
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             <label className={labelClass}>Mabini Residents{required}
@@ -534,7 +642,10 @@ export default function EmployerRegistrationProfileModule({
           )}
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section
+          id="employer-registration-contact"
+          className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+        >
           <h3 className="font-bold text-slate-900">Contact Details</h3>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <h4 className="font-semibold text-[#123B70] sm:col-span-2">HR / Recruitment / Operations Manager</h4>
@@ -586,31 +697,43 @@ export default function EmployerRegistrationProfileModule({
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section
+          id="employer-registration-certification"
+          className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+        >
           <h3 className="font-bold text-slate-900">Certification and Consent</h3>
           <p className="mt-3 text-sm leading-6 text-slate-600">
             I hereby certify that the above information provided is true and correct to the best of my knowledge and I allow the Mabini PESO to include and use the Company profile in the PESO Employment Information System (PEIS). The information herein shall be treated as confidential in Compliance with the Data Privacy Act of 2012.
           </p>
           <div className={`${labelClass} mt-4`}>
             Authorized Representative's Electronic Signature{required}
-            {form.authorized_representative_signature &&
+            {isEditing &&
+              form.authorized_representative_signature &&
               !form.authorized_representative_signature.startsWith("data:image/") && (
                 <span className="mt-2 block rounded-lg bg-slate-50 p-3 text-sm font-normal text-slate-600">
                   Previously saved signature: {form.authorized_representative_signature}
                 </span>
               )}
-            <ESignatureInput
-              value={form.authorized_representative_signature}
-              disabled={!isEditing || saving}
-              onChange={(signature) => {
-                setForm((current) => ({
-                  ...current,
-                  authorized_representative_signature: signature,
-                }));
-                setError("");
-                setSuccess("");
-              }}
-            />
+            {isEditing ? (
+              <ESignatureInput
+                value={form.authorized_representative_signature}
+                disabled={saving}
+                onChange={(signature) => {
+                  setForm((current) => ({
+                    ...current,
+                    authorized_representative_signature: signature,
+                  }));
+                  setError("");
+                  setSuccess("");
+                }}
+              />
+            ) : (
+              <p className="mt-2 text-sm font-normal text-slate-500">
+                {form.authorized_representative_signature.trim()
+                  ? "Hidden while not editing."
+                  : "Not provided."}
+              </p>
+            )}
           </div>
           <label className="mt-4 flex items-start gap-2.5 text-sm leading-6 text-slate-700">
             <input type="checkbox" checked={consentAccepted} onChange={(event) => setConsentAccepted(event.target.checked)} required className="mt-1 h-4 w-4 accent-[#0759AE]" />
@@ -620,16 +743,18 @@ export default function EmployerRegistrationProfileModule({
         </fieldset>
       </form>
 
-      <VerificationDocumentsModule
-        employerId={profile.employer_id}
-        userId={profile.user_id}
-        registrationDetails={{
-          ...asRecord(registrationDetails),
-          establishment_status: form.establishment_status,
-        }}
-        verificationDocuments={verificationDocuments}
-        onDocumentsSaved={onDocumentsSaved}
-      />
+      <div id="employer-registration-paperwork" className="scroll-mt-24">
+        <VerificationDocumentsModule
+          employerId={profile.employer_id}
+          userId={profile.user_id}
+          registrationDetails={{
+            ...asRecord(registrationDetails),
+            establishment_status: form.establishment_status,
+          }}
+          verificationDocuments={verificationDocuments}
+          onDocumentsSaved={onDocumentsSaved}
+        />
+      </div>
       <p className="text-xs text-slate-500">
         Required paperwork: {employerDocumentRequirements.filter((item) =>
           item.id !== "company_profile" ||
