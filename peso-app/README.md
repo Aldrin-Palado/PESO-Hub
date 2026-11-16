@@ -55,6 +55,19 @@ Staff profile photos appear in Admin Accounts when available. They remain privat
 the profile-photo migration grants signed-photo reads for other accounts to active
 admins only. Apply pending migrations with the same `supabase db push` command.
 
+## Job-seeker application archiving
+
+Applications with a status of hired, rejected, or withdrawn stay active for one calendar
+month after the most recent qualifying status change, then move to Archived Applications.
+Changing to another status cancels the timer; changing to a qualifying status resets it.
+PostgreSQL stores the deadline and a `pg_cron` job archives expired applications every
+15 minutes, including when the job seeker is signed out. Apply the migration from the
+workspace root:
+
+```sh
+npm exec --prefix ./peso-app -- supabase --workdir ./peso-app db push
+```
+
 ## Groq AI features
 
 The public homepage chat and job-seeker AI assistant and job matching call the `peso-ai`

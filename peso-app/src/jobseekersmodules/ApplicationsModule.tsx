@@ -40,6 +40,7 @@ type Application = {
   address: string | null;
   resumeUrl: string | null;
   qualificationFiles: ApplicationDocument[];
+  archivedAt: string | null;
 };
 
 type Props = {
@@ -76,6 +77,9 @@ export default function ApplicationsModule({
   onNavigate,
 }: Props) {
   const [filter, setFilter] = useState("All");
+  const [applicationSection, setApplicationSection] = useState<
+    "active" | "archived"
+  >("active");
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -103,7 +107,8 @@ export default function ApplicationsModule({
           applicant_contact_no,
           applicant_address,
           applicant_resume_url,
-          applicant_qualification_files
+          applicant_qualification_files,
+          archived_at
         `)
         .eq("job_seeker_id", seeker.job_seeker_id)
         .order("date_applied", { ascending: false });
@@ -168,6 +173,7 @@ export default function ApplicationsModule({
             contactNumber: row.applicant_contact_no,
             address: row.applicant_address,
             resumeUrl: row.applicant_resume_url,
+            archivedAt: row.archived_at,
             qualificationFiles: Array.isArray(row.applicant_qualification_files)
               ? row.applicant_qualification_files.filter(
                   (document): document is ApplicationDocument =>
@@ -187,8 +193,23 @@ export default function ApplicationsModule({
 
     void loadApplications();
 
+    const channel = supabase
+      .channel(`job-seeker-applications-${seeker.job_seeker_id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "application",
+          filter: `job_seeker_id=eq.${seeker.job_seeker_id}`,
+        },
+        () => void loadApplications(),
+      )
+      .subscribe();
+
     return () => {
       active = false;
+      void supabase.removeChannel(channel);
     };
   }, [seeker.job_seeker_id]);
 
@@ -228,14 +249,26 @@ export default function ApplicationsModule({
     }
   };
 
+  const activeApplications = useMemo(
+    () => applications.filter((application) => !application.archivedAt),
+    [applications],
+  );
+  const archivedApplications = useMemo(
+    () => applications.filter((application) => Boolean(application.archivedAt)),
+    [applications],
+  );
+  const sectionApplications =
+    applicationSection === "archived"
+      ? archivedApplications
+      : activeApplications;
   const filtered = useMemo(
     () =>
-      applications.filter(
+      sectionApplications.filter(
         (application) =>
           filter === "All" ||
           application.status.toLowerCase() === filter.toLowerCase()
       ),
-    [applications, filter]
+    [filter, sectionApplications]
   );
 
   return (
@@ -256,6 +289,57 @@ export default function ApplicationsModule({
             Applications of {seeker.full_name}
           </p>
         )}
+      </div>
+
+      <div
+        role="tablist"
+        aria-label="Application sections"
+        className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200 bg-white"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={applicationSection === "active"}
+          onClick={() => setApplicationSection("active")}
+          className={`flex min-h-12 items-center justify-center gap-2 px-4 py-3 text-sm font-semibold transition ${
+            applicationSection === "active"
+              ? "bg-blue-700 text-white"
+              : "text-slate-600 hover:bg-blue-50"
+          }`}
+        >
+          Active Applications
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs ${
+              applicationSection === "active"
+                ? "bg-white/20 text-white"
+                : "bg-slate-100 text-slate-600"
+            }`}
+          >
+            {activeApplications.length}
+          </span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={applicationSection === "archived"}
+          onClick={() => setApplicationSection("archived")}
+          className={`flex min-h-12 items-center justify-center gap-2 border-l border-slate-200 px-4 py-3 text-sm font-semibold transition ${
+            applicationSection === "archived"
+              ? "bg-blue-700 text-white"
+              : "text-slate-600 hover:bg-blue-50"
+          }`}
+        >
+          Archived Applications
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs ${
+              applicationSection === "archived"
+                ? "bg-white/20 text-white"
+                : "bg-slate-100 text-slate-600"
+            }`}
+          >
+            {archivedApplications.length}
+          </span>
+        </button>
       </div>
 
       {/* Filter */}
@@ -314,7 +398,11 @@ export default function ApplicationsModule({
             </h3>
 
             <p className="mt-1 text-sm text-gray-500">
-              There are no applications under the selected status.
+              {filtered.length === 0 && filter !== "All"
+                ? "There are no applications under the selected status."
+                : applicationSection === "active"
+                  ? "There are no active applications."
+                  : "There are no archived applications."}
             </p>
 
             <button
