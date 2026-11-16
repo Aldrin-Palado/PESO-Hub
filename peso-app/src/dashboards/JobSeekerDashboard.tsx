@@ -55,6 +55,26 @@ type Seeker = {
   registration_details: unknown;
 };
 
+function getRegistrationReadinessMessage(
+  status: Seeker["verification_status"],
+): string {
+  if (status === "pending") {
+    return "Your registration is complete and ready for PESO verification.";
+  }
+  if (status === "verified") {
+    return "Your registration is complete and verified. Your account is ready to find and apply for jobs.";
+  }
+  return "Your registration is complete, but your account was not approved by PESO. Please contact PESO for next steps.";
+}
+
+function getRegistrationReadinessClass(
+  status: Seeker["verification_status"],
+): string {
+  if (status === "verified") return "border-green-200 bg-green-50 text-green-800";
+  if (status === "not_approved") return "border-amber-200 bg-amber-50 text-amber-900";
+  return "border-blue-200 bg-blue-50 text-blue-900";
+}
+
 type JobSeekerNotification = {
   message_id: string;
   sender_user_id: string;
@@ -1059,8 +1079,11 @@ export default function JobSeekerDashboard() {
               </span>
             </div>
             {incompleteTasks.length === 0 && (
-              <p role="status" className="mt-3 text-sm font-semibold text-emerald-700">
-                Your registration information is complete and ready for job applications.
+              <p
+                role="status"
+                className={`mt-3 rounded-xl border p-3 text-sm font-semibold ${getRegistrationReadinessClass(seeker.verification_status)}`}
+              >
+                {getRegistrationReadinessMessage(seeker.verification_status)}
               </p>
             )}
           </div>
@@ -1990,17 +2013,16 @@ export default function JobSeekerDashboard() {
             </div>
           )}
           {seeker &&
-            seeker.verification_status === "pending" &&
+            activePage !== "Profile" &&
             isJobSeekerProfileComplete(
               seeker.registration_details,
               seeker.resume_url,
             ) && (
               <p
                 role="status"
-                className="mx-auto mb-6 max-w-7xl rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900"
+                className={`mx-auto mb-6 max-w-7xl rounded-xl border p-4 text-sm ${getRegistrationReadinessClass(seeker.verification_status)}`}
               >
-                Your account is awaiting PESO verification. You can apply for
-                jobs again after PESO approves your updated details.
+                {getRegistrationReadinessMessage(seeker.verification_status)}
               </p>
             )}
           {renderContent()}
