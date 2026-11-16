@@ -1,5 +1,4 @@
 
-import type { ReactNode } from "react";
 import AppIcon, { type AppIconName } from "../components/AppIcon";
 import { getApplicationStatusStyles } from "../utils/applicationStatusStyles";
 

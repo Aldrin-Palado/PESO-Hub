@@ -36,7 +36,6 @@ type JobSeekerPage =
 
 type Props = {
   seeker: Seeker;
-  profileComplete: boolean;
   onNavigate: (page: JobSeekerPage) => void;
 };
 
@@ -65,7 +64,6 @@ function saveSeenIds(storageKey: string, ids: string[]) {
 
 export default function HomeModule({
   seeker,
-  profileComplete,
   onNavigate,
 }: Props) {
   const [pesoPosts, setPesoPosts] = useState<PESOPost[]>([]);

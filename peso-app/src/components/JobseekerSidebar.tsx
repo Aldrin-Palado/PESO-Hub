@@ -1,4 +1,3 @@
-import React from "react";
 import AppIcon from "./AppIcon";
 import ModuleIcon from "./ModuleIcon";
 

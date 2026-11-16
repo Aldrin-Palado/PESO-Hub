@@ -264,9 +264,6 @@ export default function AdminDashboard() {
   const [jobSeekers, setJobSeekers] =
     useState<JobSeeker[]>([]);
 
-  const [jobSeekerApplicationCounts, setJobSeekerApplicationCounts] =
-    useState<Record<string, number>>({});
-
   const [applications, setApplications] =
     useState<Application[]>([]);
 
@@ -309,9 +306,6 @@ export default function AdminDashboard() {
   ============================================================ */
 
   const [jobStatusFilter, setJobStatusFilter] =
-    useState("All");
-
-  const [employerStatusFilter, setEmployerStatusFilter] =
     useState("All");
 
   const [applicationStatusFilter, setApplicationStatusFilter] =
@@ -1429,48 +1423,25 @@ export default function AdminDashboard() {
     setModuleError("");
 
     try {
-      const [seekersResult, applicationCountsResult] = await Promise.all([
-        supabase
-          .from("job_seeker")
-          .select("*")
-          .order("created_at", { ascending: false }),
-        supabase.rpc("get_job_seeker_application_counts"),
-      ]);
+      const { data, error } = await supabase
+        .from("job_seeker")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-      if (seekersResult.error) {
+      if (error) {
         console.error(
           "Job seekers error:",
-          seekersResult.error
+          error
         );
         setJobSeekers([]);
-        setModuleError(`Job seekers could not be loaded: ${seekersResult.error.message}`);
+        setModuleError(`Job seekers could not be loaded: ${error.message}`);
         return;
       }
 
-      setJobSeekers(seekersResult.data ?? []);
-      if (applicationCountsResult.error) {
-        console.error(
-          "Job seeker application counts error:",
-          applicationCountsResult.error,
-        );
-        setJobSeekerApplicationCounts({});
-        setModuleError(
-          `Job seekers loaded, but application counts could not be loaded: ${applicationCountsResult.error.message}`,
-        );
-        return;
-      }
-
-      const counts: Record<string, number> = {};
-      for (const result of parseJobSeekerApplicationCounts(
-        applicationCountsResult.data,
-      )) {
-        counts[result.job_seeker_id] = Number(result.application_count);
-      }
-      setJobSeekerApplicationCounts(counts);
+      setJobSeekers(data ?? []);
     } catch (error) {
       console.error("Job seeker records could not be loaded:", error);
       setJobSeekers([]);
-      setJobSeekerApplicationCounts({});
       setModuleError(
         error instanceof Error
           ? error.message
@@ -2640,46 +2611,6 @@ function SummaryRow({
       </span>
 
     </div>
-  );
-}
-
-function TableHeader({
-  children,
-  className = "",
-  compact = false,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  compact?: boolean;
-}) {
-  return (
-    <th className={`whitespace-nowrap border-b border-slate-200 ${compact ? "px-2 py-2" : "px-4 py-3"} text-left text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-500 ${className}`}>
-      {children}
-    </th>
-  );
-}
-
-function TableCell({
-  children,
-  bold = false,
-  className = "",
-  compact = false,
-}: {
-  children: React.ReactNode;
-  bold?: boolean;
-  className?: string;
-  compact?: boolean;
-}) {
-  return (
-    <td
-      className={`${compact ? "px-2 py-2" : "px-4 py-3"} ${compact ? "text-xs" : "text-sm"} ${className} ${
-        bold
-          ? "font-semibold text-slate-700"
-          : "text-slate-600"
-      }`}
-    >
-      {children}
-    </td>
   );
 }
 

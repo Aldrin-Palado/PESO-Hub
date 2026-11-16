@@ -27,7 +27,6 @@ import MessagesModule from "../jobseekersmodules/MessagesModule";
 import AIChatbotModule from "../jobseekersmodules/AIChatbotModule";
 import JobMatchesModule from "../jobseekersmodules/JobMatchesModule";
 import {
-  areJobSeekerProfileSectionsComplete,
   JOB_SEEKER_PROFILE_SECTION_TITLES,
   getIncompleteJobSeekerProfileSections,
   isJobSeekerProfileComplete,
@@ -1638,9 +1637,6 @@ export default function JobSeekerDashboard() {
         return (
           <HomeModule
             seeker={seeker}
-            profileComplete={areJobSeekerProfileSectionsComplete(
-              seeker.registration_details,
-            )}
             onNavigate={(page) =>
               handlePageChange(
                 page === "Applications"
@@ -1752,9 +1748,6 @@ export default function JobSeekerDashboard() {
         return (
           <HomeModule
             seeker={seeker}
-            profileComplete={areJobSeekerProfileSectionsComplete(
-              seeker.registration_details,
-            )}
             onNavigate={(page) =>
               handlePageChange(
                 page === "Applications"
