@@ -17,6 +17,7 @@ type Application = {
   job_seeker_id?: string;
   employer_id?: string;
   is_peso_application?: boolean;
+  is_own_peso_application?: boolean;
   job_vacancy_id?: string | null;
   status?: string;
   application_status?: string;
@@ -164,7 +165,9 @@ export default function ApplicationsModule({
   const scopedApplications = useMemo(
     () =>
       applicationScope === "peso"
-        ? applications.filter((application) => application.is_peso_application)
+        ? applications.filter(
+            (application) => application.is_own_peso_application,
+          )
         : applications,
     [applicationScope, applications],
   );
@@ -389,16 +392,10 @@ export default function ApplicationsModule({
       <ApplicationScopeToggle
         value={applicationScope}
         pesoCount={applications.filter(
-          (application) => application.is_peso_application,
+          (application) => application.is_own_peso_application,
         ).length}
         overallCount={applications.length}
         onChange={setApplicationScope}
-      />
-      <ApplicationArchiveTabs
-        value={applicationSection}
-        onChange={setApplicationSection}
-        activeCount={activeCount}
-        archivedCount={archivedCount}
       />
       <ModuleScoreboard
         title="Applications"
@@ -515,11 +512,21 @@ export default function ApplicationsModule({
       </section>
 
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <header className="flex items-center justify-between border-b border-slate-100 px-3 py-2.5">
-          <h2 className="text-xs font-bold text-slate-700">Applications</h2>
-          <span className="text-[10px] text-slate-400">
-            {visibleApplications.length} record{visibleApplications.length === 1 ? "" : "s"}
-          </span>
+        <header className="flex flex-col gap-2 border-b border-slate-100 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center justify-between gap-2 sm:justify-start">
+            <h2 className="text-xs font-bold text-slate-700">Applications</h2>
+            <span className="text-[10px] text-slate-400">
+              {visibleApplications.length} record{visibleApplications.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <div className="w-full sm:max-w-[36rem]">
+            <ApplicationArchiveTabs
+              value={applicationSection}
+              onChange={setApplicationSection}
+              activeCount={activeCount}
+              archivedCount={archivedCount}
+            />
+          </div>
         </header>
         {loading ? (
           <LoadingMessage />

@@ -292,13 +292,6 @@ export default function ApplicationsModule({
         )}
       </div>
 
-      <ApplicationArchiveTabs
-        value={applicationSection}
-        onChange={setApplicationSection}
-        activeCount={activeCount}
-        archivedCount={archivedCount}
-      />
-
       {/* Filter */}
       <div className="flex flex-wrap gap-2">
         {[
@@ -331,6 +324,22 @@ export default function ApplicationsModule({
 
       {/* Applications */}
       <div className="space-y-4">
+        <div className="flex flex-col gap-3 border-b border-gray-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center justify-between gap-2 sm:justify-start">
+            <h2 className="text-sm font-bold text-gray-700">Applications</h2>
+            <span className="text-xs text-gray-400">
+              {filtered.length} record{filtered.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <div className="w-full sm:max-w-[36rem]">
+            <ApplicationArchiveTabs
+              value={applicationSection}
+              onChange={setApplicationSection}
+              activeCount={activeCount}
+              archivedCount={archivedCount}
+            />
+          </div>
+        </div>
 
         {loading ? (
           <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-sm text-sm text-gray-500">

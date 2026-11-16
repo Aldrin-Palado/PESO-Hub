@@ -74,6 +74,7 @@ type StaffApplication = {
   job_location: string | null;
   job_requirements: string | null;
   is_peso_application: boolean;
+  is_own_peso_application: boolean;
   can_update_status: boolean;
   [key: string]: any;
 };
@@ -547,7 +548,7 @@ export default function StaffDashboard() {
         );
 
       case "Job Application":
-        return <JobApplications />;
+        return <JobApplications userId={staff?.user_id ?? null} />;
 
       case "Employers":
         return (
@@ -1356,7 +1357,7 @@ function dateValue(value: unknown): string {
    JOB APPLICATIONS
 ========================================================= */
 
-function JobApplications() {
+function JobApplications({ userId }: { userId: string | null }) {
   const [applications, setApplications] = useState<StaffApplication[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -1385,7 +1386,7 @@ function JobApplications() {
         supabase
           .from("job_vacancy")
           .select(
-            "job_vacancy_id, employer_id, position_title, requirements, location",
+            "job_vacancy_id, employer_id, position_title, posted_by_user_id, requirements, location",
           ),
       ]);
 
@@ -1443,6 +1444,8 @@ function JobApplications() {
                   candidate.position_title === application.position_title,
             );
             const isPesoApplication = employer?.is_peso === true;
+            const isOwnPesoApplication =
+              isPesoApplication && job?.posted_by_user_id === userId;
 
             return {
               ...application,
@@ -1462,11 +1465,11 @@ function JobApplications() {
               job_location: job?.location ?? null,
               job_requirements: job?.requirements ?? null,
               is_peso_application: isPesoApplication,
+              is_own_peso_application: isOwnPesoApplication,
               can_update_status:
                 !employersResult.error &&
                 !jobsResult.error &&
-                isPesoApplication &&
-                Boolean(job),
+                isOwnPesoApplication,
             };
           }),
         );
@@ -1508,7 +1511,7 @@ function JobApplications() {
       active = false;
       void supabase.removeChannel(channel);
     };
-  }, []);
+  }, [userId]);
 
   const updateApplicationStatus = async (
     applicationId: string,

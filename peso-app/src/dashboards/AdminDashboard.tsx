@@ -85,6 +85,7 @@ type JobPost = {
   position?: string;
   position_title?: string;
   employer_id?: string;
+  posted_by_user_id?: string | null;
   company_name?: string;
   employer_name?: string;
   location?: string;
@@ -135,6 +136,7 @@ type Application = {
   job_seeker_id?: string;
   employer_id?: string;
   job_vacancy_id?: string;
+  is_own_peso_application?: boolean;
   status?: string;
   application_status?: string;
   created_at?: string;
@@ -1728,7 +1730,7 @@ export default function AdminDashboard() {
           supabase.from("employer").select("employer_id, name, is_peso"),
           supabase
             .from("job_vacancy")
-            .select("job_vacancy_id, position_title, employer_id, requirements, location"),
+            .select("job_vacancy_id, position_title, employer_id, posted_by_user_id, requirements, location"),
         ]);
 
       const seekers = seekersResult.data ?? [];
@@ -1841,10 +1843,15 @@ export default function AdminDashboard() {
             employer_name:
               employersById.get(application.employer_id) ?? null,
             is_peso_application: pesoEmployerIds.has(application.employer_id),
+            is_own_peso_application: Boolean(
+              pesoEmployerIds.has(application.employer_id) &&
+                job?.posted_by_user_id === account?.user_id,
+            ),
             can_update_status: Boolean(
               account &&
                 job &&
                 pesoEmployerIds.has(application.employer_id) &&
+                job.posted_by_user_id === account.user_id &&
                 (account.role === "superadmin" ||
                   permissions.includes("Applications")),
             ),
