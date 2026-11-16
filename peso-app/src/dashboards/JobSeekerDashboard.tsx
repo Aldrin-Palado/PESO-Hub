@@ -2045,6 +2045,7 @@ export default function JobSeekerDashboard() {
           )}
           {seeker &&
             activePage !== "Profile" &&
+            seeker.verification_status !== "verified" &&
             isJobSeekerProfileComplete(
               seeker.registration_details,
               seeker.resume_url,
