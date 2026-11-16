@@ -288,12 +288,18 @@ export default function SavedJobsModule({
                 >
                   <div className="p-5 sm:p-7">
                     <div className="flex items-start gap-3">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#0759AE] text-sm font-black text-white">
+                      <div
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-black text-white ${
+                          job.isPeso ? "bg-white" : "bg-[#0759AE]"
+                        }`}
+                      >
                         {job.companyLogoUrl ? (
                           <img
                             src={job.companyLogoUrl}
                             alt={`${job.company} logo`}
-                            className="h-full w-full object-cover"
+                            className={`h-full w-full ${
+                              job.isPeso ? "object-contain" : "object-cover"
+                            }`}
                           />
                         ) : (
                           job.company.charAt(0).toUpperCase()

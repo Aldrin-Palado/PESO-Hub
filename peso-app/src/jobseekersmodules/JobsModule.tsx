@@ -765,13 +765,17 @@ export default function JobsModule({
                       type="button"
                       onClick={() => setCompanyModalJob(job)}
                       aria-label={`View ${job.company} company profile`}
-                      className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#0759AE] text-sm font-black text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-black text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                        job.isPeso ? "bg-white" : "bg-[#0759AE]"
+                      }`}
                     >
                       {job.companyLogoUrl ? (
                         <img
                           src={job.companyLogoUrl}
                           alt=""
-                          className="h-full w-full object-cover"
+                          className={`h-full w-full ${
+                            job.isPeso ? "object-contain" : "object-cover"
+                          }`}
                         />
                       ) : (
                         job.company.charAt(0).toUpperCase()
@@ -898,13 +902,17 @@ export default function JobsModule({
                     type="button"
                     onClick={() => setCompanyModalJob(selectedJob)}
                     aria-label={`View ${selectedJob.company} company profile`}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-blue-50 text-lg font-black text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl text-lg font-black text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      selectedJob.isPeso ? "bg-white" : "bg-blue-50"
+                    }`}
                   >
                     {selectedJob.companyLogoUrl ? (
                       <img
                         src={selectedJob.companyLogoUrl}
                         alt=""
-                        className="h-full w-full object-cover"
+                        className={`h-full w-full ${
+                          selectedJob.isPeso ? "object-contain" : "object-cover"
+                        }`}
                       />
                     ) : (
                       selectedJob.company.charAt(0).toUpperCase()
@@ -1146,12 +1154,18 @@ export default function JobsModule({
                 </button>
               </div>
               <div className="relative px-6 pb-5 sm:px-8">
-                <div className="-mt-12 flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl border-4 border-white bg-blue-50 text-3xl font-black text-blue-700 shadow-lg">
+                <div
+                  className={`-mt-12 flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl border-4 border-white text-3xl font-black text-blue-700 shadow-lg ${
+                    companyModalJob.isPeso ? "bg-white" : "bg-blue-50"
+                  }`}
+                >
                   {companyModalJob.companyLogoUrl ? (
                     <img
                       src={companyModalJob.companyLogoUrl}
                       alt={`${companyModalJob.company} logo`}
-                      className="h-full w-full object-cover"
+                      className={`h-full w-full ${
+                        companyModalJob.isPeso ? "object-contain" : "object-cover"
+                      }`}
                     />
                   ) : (
                     companyModalJob.company.charAt(0).toUpperCase()
