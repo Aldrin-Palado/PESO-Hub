@@ -14,6 +14,7 @@ type JobPost = {
   job_classification: "local" | "international";
   salary_min: number | null;
   salary_max: number | null;
+  salary_period: "monthly" | "yearly";
   vacancies_available: number;
   status: string;
   date_posted: string;

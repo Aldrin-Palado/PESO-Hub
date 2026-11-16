@@ -21,6 +21,7 @@ type JobPost = {
   job_classification: "local" | "international";
   salary_min: number | null;
   salary_max: number | null;
+  salary_period: "monthly" | "yearly";
   vacancies_available: number;
   status: string;
   date_posted: string;
@@ -52,6 +53,7 @@ type JobForm = {
   salary_specified: boolean;
   salary_min: string;
   salary_max: string;
+  salary_period: "monthly" | "yearly";
   vacancies_available: string;
   deadline: string;
 };
@@ -67,6 +69,7 @@ const emptyForm: JobForm = {
   salary_specified: false,
   salary_min: "",
   salary_max: "",
+  salary_period: "monthly",
   vacancies_available: "1",
   deadline: "",
 };
@@ -152,6 +155,7 @@ export default function MyJobPostModule({
       salary_specified: job.salary_min != null || job.salary_max != null,
       salary_min: job.salary_min == null ? "" : String(job.salary_min),
       salary_max: job.salary_max == null ? "" : String(job.salary_max),
+      salary_period: job.salary_period ?? "monthly",
       vacancies_available: String(job.vacancies_available || 1),
       deadline: job.deadline ? job.deadline.slice(0, 10) : "",
     });
@@ -372,6 +376,9 @@ export default function MyJobPostModule({
 
     const salaryMin = form.salary_specified ? Number(form.salary_min) : null;
     const salaryMax = form.salary_specified ? Number(form.salary_max) : null;
+    const salaryPeriod = form.salary_specified
+      ? form.salary_period
+      : "monthly";
 
     setSaving(true);
     setMessage("");
@@ -399,6 +406,7 @@ export default function MyJobPostModule({
             job_classification: form.job_classification,
             salary_min: salaryMin,
             salary_max: salaryMax,
+            salary_period: salaryPeriod,
             vacancies_available: Math.max(
               1,
               Number(form.vacancies_available) || 1
@@ -431,6 +439,7 @@ export default function MyJobPostModule({
             job_classification: form.job_classification,
             salary_min: salaryMin,
             salary_max: salaryMax,
+            salary_period: salaryPeriod,
             vacancies_available: Math.max(
               1,
               Number(form.vacancies_available) || 1
@@ -750,6 +759,7 @@ export default function MyJobPostModule({
                     salary_specified: false,
                     salary_min: "",
                     salary_max: "",
+                    salary_period: "monthly",
                   }))
                 }
                 className="h-4 w-4 rounded border-slate-300 text-[#0446A7] focus:ring-blue-500"
@@ -760,7 +770,7 @@ export default function MyJobPostModule({
         </fieldset>
 
         {form.salary_specified && (
-          <>
+          <div className="grid gap-4 md:col-span-2 md:grid-cols-2">
             <label className="text-sm font-semibold text-slate-700">
               Minimum Salary *
               <input
@@ -774,20 +784,39 @@ export default function MyJobPostModule({
                 className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
               />
             </label>
-            <label className="text-sm font-semibold text-slate-700">
-              Maximum Salary *
-              <input
-                required
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.salary_max}
-                onChange={(event) => updateField("salary_max", event.target.value)}
-                placeholder="Enter maximum salary"
-                className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
-              />
-            </label>
-          </>
+            <div className="grid grid-cols-[minmax(0,1fr)_9rem] gap-3">
+              <label className="min-w-0 text-sm font-semibold text-slate-700">
+                Maximum Salary *
+                <input
+                  required
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.salary_max}
+                  onChange={(event) => updateField("salary_max", event.target.value)}
+                  placeholder="Enter maximum salary"
+                  className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
+                />
+              </label>
+              <label className="min-w-0 text-sm font-semibold text-slate-700">
+                Salary Period *
+                <select
+                  required
+                  value={form.salary_period}
+                  onChange={(event) =>
+                    updateField(
+                      "salary_period",
+                      event.target.value as JobForm["salary_period"],
+                    )
+                  }
+                  className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
+                >
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                </select>
+              </label>
+            </div>
+          </div>
         )}
 
         <label className="text-sm font-semibold text-slate-700 md:col-span-2">
@@ -837,17 +866,19 @@ export default function MyJobPostModule({
         </label>
       </div>
 
-      <button
-        type="submit"
-        disabled={saving}
-        className="rounded-xl bg-[#0446A7] px-6 py-3 text-sm font-bold text-white disabled:opacity-50"
-      >
-        {saving
-          ? "Saving..."
-          : editingId
-            ? "Save Changes"
-            : "Publish Job"}
-      </button>
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-xl bg-[#0446A7] px-6 py-3 text-sm font-bold text-white disabled:opacity-50"
+        >
+          {saving
+            ? "Saving..."
+            : editingId
+              ? "Save Changes"
+              : "Publish Job"}
+        </button>
+      </div>
     </form>
   );
 

@@ -12,6 +12,7 @@ import AdminSidebar, {
   AdminModule,
 } from "../components/AdminSidebar";
 import ProfileAvatar from "../components/ProfileAvatar";
+import OfficialPESOBadge from "../components/OfficialPESOBadge";
 
 import AdminAccounts from "../adminmodules/ManageAccounts";
 import AdminAuditLogsModule, {
@@ -2484,8 +2485,13 @@ function MyProfile({
           <div className="min-w-0">
             <h2 className="text-lg font-black text-[#123B70]">
               {account?.full_name || "PESO User"}
+              <span className="ml-2 inline-flex align-middle">
+                <OfficialPESOBadge size="medium" />
+              </span>
             </h2>
             <p className="mt-1 text-sm text-slate-500">
+              Official PESO account
+              <span className="px-1.5" aria-hidden="true">·</span>
               {account?.role === "superadmin" ? "Super Admin" : "PESO Staff"}
             </p>
             <p className="mt-1 break-words text-sm text-slate-500">

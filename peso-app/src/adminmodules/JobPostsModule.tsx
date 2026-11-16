@@ -18,6 +18,7 @@ type JobPost = {
   employment_type?: string;
   salary_min?: number | string | null;
   salary_max?: number | string | null;
+  salary_period?: "monthly" | "yearly" | null;
   vacancies_available?: number;
   status?: string;
   description?: string;
@@ -68,7 +69,8 @@ function getDisplayStatus(job: JobPost): string {
 
 function getSalaryRange(job: JobPost): string {
   if (job.salary_min == null && job.salary_max == null) return "Not specified";
-  return `${job.salary_min ?? "-"} – ${job.salary_max ?? "-"}`;
+  const period = job.salary_period === "yearly" ? "year" : "month";
+  return `${job.salary_min ?? "-"} – ${job.salary_max ?? "-"} per ${period}`;
 }
 
 export default function JobPostsModule({

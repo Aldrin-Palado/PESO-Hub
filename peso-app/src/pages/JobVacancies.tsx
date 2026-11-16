@@ -11,6 +11,7 @@ import type {
   PublicJobVacancyPreviewRow,
 } from "../types/JobVacancy";
 import { supabase } from "../services/supabase";
+import { getEmployerProfileLogo } from "../utils/employerProfileLogo";
 
 const heroImage = new URL(
   "../assets/images/job-vacancies-background.png",
@@ -74,6 +75,9 @@ function JobVacancies() {
             } else if (job.salary_max != null) {
               salary = `Up to ₱${Number(job.salary_max).toLocaleString()}`;
             }
+            if (job.salary_min != null || job.salary_max != null) {
+              salary += ` per ${job.salary_period === "yearly" ? "year" : "month"}`;
+            }
 
             return {
               job_vacancy_id: job.job_vacancy_id,
@@ -95,8 +99,12 @@ function JobVacancies() {
                 description: job.employer_description,
                 industry: job.employer_industry,
                 website: job.employer_website,
-                logoUrl: job.employer_logo_url,
+                logoUrl: getEmployerProfileLogo(
+                  job.employer_logo_url,
+                  job.employer_is_peso,
+                ),
                 verified: job.employer_verified,
+                isPeso: job.employer_is_peso,
               },
             };
           })
@@ -111,7 +119,11 @@ function JobVacancies() {
               job_qualifications: job.job_qualifications ?? undefined,
               employer: {
                 name: job.employer_name ?? undefined,
-                logoUrl: job.employer_logo_url,
+                logoUrl: getEmployerProfileLogo(
+                  job.employer_logo_url,
+                  job.employer_is_peso,
+                ),
+                isPeso: job.employer_is_peso,
               },
             };
           });

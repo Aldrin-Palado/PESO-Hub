@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "../services/supabase";
 import AppIcon from "../components/AppIcon";
 import JobDetailsModal from "../components/JobDetailsModal";
+import OfficialPESOBadge from "../components/OfficialPESOBadge";
+import { getEmployerProfileLogo } from "../utils/employerProfileLogo";
 import type { OpenJobVacancyRow } from "../types/JobVacancy";
 
 type Seeker = {
@@ -13,6 +15,7 @@ type Job = {
   title: string;
   company: string;
   companyLogoUrl: string | null;
+  isPeso: boolean;
   employerVerified: boolean;
   location: string;
   type: string;
@@ -103,12 +106,19 @@ export default function SavedJobsModule({
           } else if (salaryMax !== null) {
             salary = `Up to ₱${salaryMax.toLocaleString()}`;
           }
+          if (salaryMin !== null || salaryMax !== null) {
+            salary += ` per ${row.salary_period === "yearly" ? "year" : "month"}`;
+          }
 
           return {
             id: row.job_vacancy_id,
             title: row.position_title,
             company: row.employer_name || "Company name not provided",
-            companyLogoUrl: row.employer_logo_url,
+            companyLogoUrl: getEmployerProfileLogo(
+              row.employer_logo_url,
+              row.employer_is_peso,
+            ),
+            isPeso: row.employer_is_peso,
             employerVerified: row.employer_verified,
             location: row.location || "Location not specified",
             type: row.employment_type || "Type not specified",
@@ -294,8 +304,9 @@ export default function SavedJobsModule({
                         <p className="text-xs font-medium text-slate-400">
                           {postedDate}
                         </p>
-                        <p className="mt-1 truncate text-sm font-semibold text-slate-700">
+                        <p className="mt-1 flex items-center gap-1.5 truncate text-sm font-semibold text-slate-700">
                           {job.company}
+                          {job.isPeso && <OfficialPESOBadge />}
                         </p>
                         <h3 className="mt-2 text-lg font-black text-slate-950">
                           {job.title}
@@ -371,6 +382,7 @@ export default function SavedJobsModule({
             title: selectedJob.title,
             company: selectedJob.company,
             companyLogoUrl: selectedJob.companyLogoUrl,
+            employerIsPeso: selectedJob.isPeso,
             employerVerified: selectedJob.employerVerified,
             location: selectedJob.location,
             employmentType: selectedJob.type,

@@ -314,7 +314,7 @@ export default function StaffDashboard() {
             supabase
               .from("job_vacancy")
               .select(
-                "job_vacancy_id, employer_id, position_title, description, job_qualifications, requirements, location, employment_type, salary_min, salary_max, vacancies_available, status, date_posted, deadline",
+                "job_vacancy_id, employer_id, position_title, description, job_qualifications, requirements, location, employment_type, salary_min, salary_max, salary_period, vacancies_available, status, date_posted, deadline",
               )
               .order("date_posted", { ascending: false }),
             supabase.rpc("get_job_post_employer_summaries"),
@@ -1030,7 +1030,7 @@ function StaffRecordsModule({
             label: "Salary Range",
             value: (record) =>
               record.salary_min != null || record.salary_max != null
-                ? `${textValue(record.salary_min, "-")} – ${textValue(record.salary_max, "-")}`
+                ? `${textValue(record.salary_min, "-")} – ${textValue(record.salary_max, "-")} per ${record.salary_period === "yearly" ? "year" : "month"}`
                 : "-",
           },
           { label: "Openings", value: (record) => textValue(record.vacancies_available) },

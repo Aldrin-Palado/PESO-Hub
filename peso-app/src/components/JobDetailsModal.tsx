@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import AppIcon from "./AppIcon";
+import OfficialPESOBadge from "./OfficialPESOBadge";
 
 export type JobDetails = {
   id: string;
@@ -7,6 +8,7 @@ export type JobDetails = {
   company: string;
   companyLogoUrl?: string | null;
   employerVerified?: boolean;
+  employerIsPeso?: boolean;
   location?: string | null;
   employmentType?: string | null;
   classification?: string | null;
@@ -125,14 +127,16 @@ export default function JobDetailsModal({
               <div className="min-w-0">
                 <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-bold text-sky-700">
                   {job.company}
-                  {job.employerVerified && (
+                  {job.employerIsPeso ? (
+                    <OfficialPESOBadge />
+                  ) : job.employerVerified ? (
                     <span
                       title="Verified employer"
                       className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"
                     >
                       <AppIcon name="check" className="h-3 w-3" />
                     </span>
-                  )}
+                  ) : null}
                 </p>
                 <p className="text-xs text-slate-500">
                   {displayDate(job.datePosted) || "Recently posted"}
@@ -159,14 +163,16 @@ export default function JobDetailsModal({
               </h2>
               <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-slate-600">
                 {job.company}
-                {job.employerVerified && (
+                {job.employerIsPeso ? (
+                  <OfficialPESOBadge />
+                ) : job.employerVerified ? (
                   <span
                     title="Verified employer"
                     className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"
                   >
                     <AppIcon name="check" className="h-3 w-3" />
                   </span>
-                )}
+                ) : null}
               </p>
             </div>
 

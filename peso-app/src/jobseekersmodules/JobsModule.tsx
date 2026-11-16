@@ -8,6 +8,7 @@ import {
 } from "react";
 import { supabase } from "../services/supabase";
 import AppIcon from "../components/AppIcon";
+import OfficialPESOBadge from "../components/OfficialPESOBadge";
 import AutoResizeTextarea from "../components/AutoResizeTextarea";
 import FilterDropdown from "../components/FilterDropdown";
 import {
@@ -18,6 +19,7 @@ import {
   getResumeExtension,
 } from "../services/resumes";
 import { isJobSeekerProfileComplete } from "../services/jobSeekerProfile";
+import { getEmployerProfileLogo } from "../utils/employerProfileLogo";
 import type { OpenJobVacancyRow } from "../types/JobVacancy";
 
 const PROFILE_SETUP_REQUIRED_MESSAGE =
@@ -53,6 +55,7 @@ type Job = {
   companyIndustry: string | null;
   companyWebsite: string | null;
   companyLogoUrl: string | null;
+  isPeso: boolean;
   location: string;
   type: string;
   classification: "local" | "international";
@@ -167,6 +170,9 @@ export default function JobsModule({
           } else if (salaryMax !== null) {
             salary = `Up to ₱${salaryMax.toLocaleString()}`;
           }
+          if (salaryMin !== null || salaryMax !== null) {
+            salary += ` per ${row.salary_period === "yearly" ? "year" : "month"}`;
+          }
 
           return {
             id: row.job_vacancy_id,
@@ -177,7 +183,11 @@ export default function JobsModule({
             companyDescription: row.employer_description,
             companyIndustry: row.employer_industry,
             companyWebsite: row.employer_website,
-            companyLogoUrl: row.employer_logo_url,
+            companyLogoUrl: getEmployerProfileLogo(
+              row.employer_logo_url,
+              row.employer_is_peso,
+            ),
+            isPeso: row.employer_is_peso,
             location: row.location || "Location not specified",
             type: row.employment_type || "Type not specified",
             classification: row.job_classification,
@@ -773,14 +783,16 @@ export default function JobsModule({
                         >
                           {job.company}
                         </button>
-                        {job.employerVerified && (
+                        {job.isPeso ? (
+                          <OfficialPESOBadge />
+                        ) : job.employerVerified ? (
                           <span
                             title="Verified employer"
                             className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"
                           >
                             <AppIcon name="check" className="h-3 w-3" />
                           </span>
-                        )}
+                        ) : null}
                       </p>
                       <h3 className="mt-2 text-lg font-black leading-snug text-slate-950 sm:text-xl">
                         {job.title}
@@ -903,14 +915,16 @@ export default function JobsModule({
                       >
                         {selectedJob.company}
                       </button>
-                      {selectedJob.employerVerified && (
+                      {selectedJob.isPeso ? (
+                        <OfficialPESOBadge />
+                      ) : selectedJob.employerVerified ? (
                         <span
                           title="Verified employer"
                           className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"
                         >
                           <AppIcon name="check" className="h-3 w-3" />
                         </span>
-                      )}
+                      ) : null}
                     </p>
                     <p className="text-xs text-slate-500">
                       {selectedJob.datePosted
@@ -1144,17 +1158,21 @@ export default function JobsModule({
                   className="mt-4 flex flex-wrap items-center gap-2 text-xl font-black text-slate-950 sm:text-2xl"
                 >
                   {companyModalJob.company}
-                  {companyModalJob.employerVerified && (
+                  {companyModalJob.isPeso ? (
+                    <OfficialPESOBadge size="medium" />
+                  ) : companyModalJob.employerVerified ? (
                     <span
                       title="Verified employer"
                       className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white"
                     >
                       <AppIcon name="check" className="h-3.5 w-3.5" />
                     </span>
-                  )}
+                  ) : null}
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  {companyModalJob.companyIndustry || "Company profile"}
+                  {companyModalJob.isPeso
+                    ? "Official PESO account"
+                    : companyModalJob.companyIndustry || "Company profile"}
                 </p>
               </div>
             </div>
@@ -1162,7 +1180,7 @@ export default function JobsModule({
             <div className="space-y-6 border-t border-slate-100 p-6 sm:p-8">
               <section>
                 <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                  Company background
+                  {companyModalJob.isPeso ? "About PESO" : "Company background"}
                 </h3>
                 <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
                   {companyModalJob.companyDescription ||

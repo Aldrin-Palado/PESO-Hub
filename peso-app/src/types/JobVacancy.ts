@@ -8,6 +8,7 @@ export interface OpenJobVacancyRow {
   employment_type: string;
   salary_min: number | string | null;
   salary_max: number | string | null;
+  salary_period: "monthly" | "yearly";
   vacancies_available: number;
   date_posted: string;
   deadline: string | null;
@@ -20,6 +21,7 @@ export interface OpenJobVacancyRow {
   employer_industry: string | null;
   employer_website: string | null;
   employer_logo_url: string | null;
+  employer_is_peso: boolean;
 }
 
 export interface PublicJobVacancyPreviewRow {
@@ -32,6 +34,7 @@ export interface PublicJobVacancyPreviewRow {
   employment_type: string | null;
   description: string | null;
   job_qualifications: string | null;
+  employer_is_peso: boolean;
 }
 
 export interface JobVacancy {
@@ -57,5 +60,6 @@ export interface JobVacancy {
     website?: string | null;
     logoUrl?: string | null;
     verified?: boolean;
+    isPeso?: boolean;
   };
 }

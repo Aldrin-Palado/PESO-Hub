@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppIcon from "./AppIcon";
+import OfficialPESOBadge from "./OfficialPESOBadge";
 import { supabase } from "../services/supabase";
 import type { JobVacancy } from "../types/JobVacancy";
 
@@ -151,14 +152,16 @@ function JobCard({ job, index, isAuthenticated }: JobCardProps) {
                 ) : (
                   job.employer?.name || "Employer"
                 )}
-                {job.employer?.verified && (
+                {job.employer?.isPeso ? (
+                  <OfficialPESOBadge />
+                ) : job.employer?.verified ? (
                   <span
                     title="Verified employer"
                     className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"
                   >
                     <AppIcon name="check" className="h-3 w-3" />
                   </span>
-                )}
+                ) : null}
               </p>
               <h3 className="mt-2 text-lg font-black leading-snug text-slate-950 transition-colors group-hover:text-sky-700 sm:text-xl">
                 {job.position_title}
@@ -282,24 +285,28 @@ function JobCard({ job, index, isAuthenticated }: JobCardProps) {
                   className="mt-4 flex flex-wrap items-center gap-2 text-xl font-black text-slate-950 sm:text-2xl"
                 >
                   {job.employer?.name || "Employer"}
-                  {job.employer?.verified && (
+                  {job.employer?.isPeso ? (
+                    <OfficialPESOBadge size="medium" />
+                  ) : job.employer?.verified ? (
                     <span
                       title="Verified employer"
                       className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white"
                     >
                       <AppIcon name="check" className="h-3.5 w-3.5" />
                     </span>
-                  )}
+                  ) : null}
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  {job.employer?.industry || "Company profile"}
+                  {job.employer?.isPeso
+                    ? "Official PESO account"
+                    : job.employer?.industry || "Company profile"}
                 </p>
               </div>
             </div>
             <div className="space-y-6 border-t border-slate-100 p-6 sm:p-8">
               <section>
                 <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                  Company background
+                  {job.employer?.isPeso ? "About PESO" : "Company background"}
                 </h3>
                 <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
                   {job.employer?.description ||
