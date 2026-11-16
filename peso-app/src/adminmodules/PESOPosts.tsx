@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { supabase } from "../services/supabase";
 import FilterDropdown from "../components/FilterDropdown";
 import AutoResizeTextarea from "../components/AutoResizeTextarea";
+import { getPESOPostMedia } from "../utils/pesoPostMedia";
 
 type PESOPost = {
   id: string;
@@ -32,7 +33,7 @@ const imageTypeLabels = "JPG, PNG, or WEBP";
 const videoTypes = ["video/mp4", "video/webm", "video/quicktime"];
 const videoTypeLabels = "MP4, WEBM, or MOV";
 const bucketName = "peso-post-images";
-const maxVideoSize = 100 * 1024 * 1024;
+const maxVideoSize = 250 * 1024 * 1024;
 const emptyForm = {
   title: "",
   content: "",
@@ -210,7 +211,7 @@ export default function PESOPosts() {
     }
     const oversizedVideo = newFiles.find((file) => file.size > maxVideoSize);
     if (oversizedVideo) {
-      setActionError(`Each video must not exceed 100 MB (${oversizedVideo.name}).`);
+      setActionError(`Each video must not exceed 250 MB (${oversizedVideo.name}).`);
       if (videoInputRef.current) videoInputRef.current.value = "";
       return;
     }
@@ -699,7 +700,7 @@ export default function PESOPosts() {
                     Add one or more videos
                   </span>
                   <span className="mt-1 block text-xs text-gray-500">
-                    {videoTypeLabels} · up to 100 MB each
+                    {videoTypeLabels} · up to 250 MB each
                   </span>
                 </span>
               </button>
@@ -857,37 +858,32 @@ export default function PESOPosts() {
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {filteredPosts.map((post) => (
               <article key={post.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white transition hover:shadow-md">
-                {getPostImages(post).length > 0 ? (
+                {getPESOPostMedia(getPostImages(post), getPostVideos(post)).length > 0 ? (
                   <div className="relative">
-                    <img src={getPostImages(post)[0]} alt="" className="h-48 w-full bg-slate-50 object-cover" loading="lazy" />
-                    {getPostImages(post).length > 1 && (
+                    {getPESOPostMedia(getPostImages(post), getPostVideos(post))[0].type === "image" ? (
+                      <img
+                        src={getPESOPostMedia(getPostImages(post), getPostVideos(post))[0].url}
+                        alt=""
+                        className="h-48 w-full bg-slate-50 object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <video
+                        src={getPESOPostMedia(getPostImages(post), getPostVideos(post))[0].url}
+                        controls
+                        preload="metadata"
+                        className="h-48 w-full bg-black object-contain"
+                      />
+                    )}
+                    {getPESOPostMedia(getPostImages(post), getPostVideos(post)).length > 1 && (
                       <span className="absolute bottom-2 right-2 rounded-full bg-slate-950/75 px-2.5 py-1 text-xs font-bold text-white">
-                        {getPostImages(post).length} images
+                        {getPESOPostMedia(getPostImages(post), getPostVideos(post)).length} media items
                       </span>
                     )}
                   </div>
-                ) : getPostVideos(post).length === 0 ? (
+                ) : (
                   <div className="flex h-48 items-center justify-center bg-blue-50 text-4xl text-blue-300" aria-hidden="true">
                     PESO
-                  </div>
-                ) : null}
-                {getPostVideos(post).length > 0 && (
-                  <div className="grid gap-1 bg-slate-950">
-                    {getPostVideos(post).slice(0, 2).map((videoUrl, index) => (
-                      <video
-                        key={videoUrl}
-                        src={videoUrl}
-                        controls
-                        preload="metadata"
-                        aria-label={`PESO post video ${index + 1}`}
-                        className="max-h-48 w-full bg-black object-contain"
-                      />
-                    ))}
-                    {getPostVideos(post).length > 2 && (
-                      <p className="px-3 py-2 text-xs text-white/80">
-                        +{getPostVideos(post).length - 2} more video{getPostVideos(post).length === 3 ? "" : "s"}
-                      </p>
-                    )}
                   </div>
                 )}
                 <div className="p-5">

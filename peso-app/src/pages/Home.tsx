@@ -4,6 +4,7 @@ import Footer from "../components/Footer";
 import HeroBackground from "../components/HeroBackground";
 import Navbar from "../components/Navbar";
 import AppIcon from "../components/AppIcon";
+import { getPESOPostMedia, type PESOPostMedia } from "../utils/pesoPostMedia";
 import type { PublicJobVacancyPreviewRow } from "../types/JobVacancy";
 import { supabase } from "../services/supabase";
 
@@ -45,7 +46,7 @@ function Home() {
   const [postsLoading, setPostsLoading] = useState(true);
   const [postsError, setPostsError] = useState("");
   const [selectedPESOPost, setSelectedPESOPost] = useState<PESOPost | null>(null);
-  const [viewingImages, setViewingImages] = useState<string[] | null>(null);
+  const [viewingMedia, setViewingMedia] = useState<PESOPostMedia[] | null>(null);
   const [viewingImageIndex, setViewingImageIndex] = useState(0);
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
   const [announcements, setAnnouncements] = useState<PESOAnnouncement[]>([]);
@@ -58,6 +59,8 @@ function Home() {
     [...new Set([...(post.image_urls ?? []), ...(post.image_url ? [post.image_url] : [])])];
   const getPostVideos = (post: PESOPost) =>
     [...new Set(post.video_urls ?? [])];
+  const getPostMedia = (post: PESOPost) =>
+    getPESOPostMedia(getPostImages(post), getPostVideos(post));
 
   useEffect(() => {
     let cancelled = false;
@@ -87,33 +90,35 @@ function Home() {
   }, []);
 
   useEffect(() => {
-    if (!selectedPESOPost && !selectedAnnouncement && !viewingImages) return;
+    if (!selectedPESOPost && !selectedAnnouncement && !viewingMedia) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        if (viewingImages) {
-          setViewingImages(null);
+        if (viewingMedia) {
+          setViewingMedia(null);
         } else {
           setSelectedPESOPost(null);
           setSelectedAnnouncement(null);
         }
-      } else if (viewingImages?.length && event.key === "ArrowRight") {
-        setViewingImageIndex((index) => (index + 1) % viewingImages.length);
-      } else if (viewingImages?.length && event.key === "ArrowLeft") {
+      } else if (viewingMedia?.length && event.key === "ArrowRight") {
+        setViewingImageIndex((index) => (index + 1) % viewingMedia.length);
+      } else if (viewingMedia?.length && event.key === "ArrowLeft") {
         setViewingImageIndex(
-          (index) => (index - 1 + viewingImages.length) % viewingImages.length,
+          (index) => (index - 1 + viewingMedia.length) % viewingMedia.length,
         );
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedPESOPost, selectedAnnouncement, viewingImages]);
+  }, [selectedPESOPost, selectedAnnouncement, viewingMedia]);
 
   useEffect(() => {
     const imageUrls = [
       ...new Set([
         ...(selectedPESOPost?.image_urls ?? []),
         ...(selectedPESOPost?.image_url ? [selectedPESOPost.image_url] : []),
-        ...(viewingImages ?? []),
+        ...(viewingMedia ?? [])
+          .filter((media) => media.type === "image")
+          .map((media) => media.url),
       ]),
     ];
     imageUrls.forEach((url) => {
@@ -121,7 +126,7 @@ function Home() {
       image.fetchPriority = "low";
       image.src = url;
     });
-  }, [selectedPESOPost, viewingImages]);
+  }, [selectedPESOPost, viewingMedia]);
 
   useEffect(() => {
     let cancelled = false;
@@ -178,6 +183,10 @@ function Home() {
       cancelled = true;
     };
   }, []);
+
+  const selectedPostMedia = selectedPESOPost
+    ? getPostMedia(selectedPESOPost)
+    : [];
 
   return (
     <div className="relative isolate flex min-h-screen flex-col text-slate-800">
@@ -364,55 +373,52 @@ function Home() {
                     key={post.id}
                     className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition before:absolute before:inset-y-0 before:left-0 before:z-10 before:w-1 before:bg-gradient-to-b before:from-yellow-400 before:to-red-500 before:content-[''] hover:shadow-md"
                   >
-                    {getPostImages(post).length > 0 && (
-                      <div className={`grid gap-1 ${getPostImages(post).length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
-                        {getPostImages(post).slice(0, 4).map((imageUrl, index) => (
+                    {getPostMedia(post).length > 0 && (
+                      <div className={`grid gap-1 ${getPostMedia(post).length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+                        {getPostMedia(post).slice(0, 4).map((media, index) => (
                           <button
-                            key={imageUrl}
+                            key={media.url}
                             type="button"
                             onClick={() => {
                               setViewingImageIndex(index);
-                              setViewingImages(getPostImages(post));
+                              setViewingMedia(getPostMedia(post));
                             }}
-                            aria-label={`View image ${index + 1} of ${getPostImages(post).length} for ${post.title}`}
+                            aria-label={`View ${media.type} ${index + 1} of ${getPostMedia(post).length} for ${post.title}`}
                             className="group relative overflow-hidden bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-sky-600"
                           >
-                            <img
-                              src={imageUrl}
-                              alt=""
-                              loading="lazy"
-                              className={`h-52 w-full object-cover transition group-hover:bg-slate-100 ${
-                                index === 3 && getPostImages(post).length > 4
-                                  ? "brightness-50"
-                                  : ""
-                              }`}
-                            />
-                            {index === 3 && getPostImages(post).length > 4 && (
+                            {media.type === "image" ? (
+                              <img
+                                src={media.url}
+                                alt=""
+                                loading="lazy"
+                                className={`h-52 w-full object-cover transition group-hover:bg-slate-100 ${
+                                  index === 3 && getPostMedia(post).length > 4
+                                    ? "brightness-50"
+                                    : ""
+                                }`}
+                              />
+                            ) : (
+                              <video
+                                src={media.url}
+                                muted
+                                playsInline
+                                preload="metadata"
+                                aria-hidden="true"
+                                className="h-52 w-full bg-slate-950 object-contain"
+                              />
+                            )}
+                            {media.type === "video" && (
+                              <span className="absolute inset-0 flex items-center justify-center text-4xl text-white drop-shadow">
+                                &#9654;
+                              </span>
+                            )}
+                            {index === 3 && getPostMedia(post).length > 4 && (
                               <span className="absolute inset-0 flex items-center justify-center text-lg font-bold text-white">
-                                +{getPostImages(post).length - 4}
+                                +{getPostMedia(post).length - 4}
                               </span>
                             )}
                           </button>
                         ))}
-                      </div>
-                    )}
-                    {getPostVideos(post).length > 0 && (
-                      <div className="grid gap-1 bg-slate-950 sm:grid-cols-2">
-                        {getPostVideos(post).slice(0, 2).map((videoUrl, index) => (
-                          <video
-                            key={videoUrl}
-                            src={videoUrl}
-                            controls
-                            preload="metadata"
-                            aria-label={`PESO post video ${index + 1} for ${post.title}`}
-                            className="max-h-72 w-full bg-black object-contain"
-                          />
-                        ))}
-                        {getPostVideos(post).length > 2 && (
-                          <p className="px-3 py-2 text-xs text-white/80 sm:col-span-2">
-                            +{getPostVideos(post).length - 2} more video{getPostVideos(post).length === 3 ? "" : "s"} in post
-                          </p>
-                        )}
                       </div>
                     )}
                     <div className="p-5">
@@ -436,7 +442,10 @@ function Home() {
                       </p>
                       <button
                         type="button"
-                        onClick={() => setSelectedPESOPost(post)}
+                        onClick={() => {
+                          setViewingImageIndex(0);
+                          setSelectedPESOPost(post);
+                        }}
                         className="mt-4 text-sm font-semibold text-sky-700 hover:text-sky-900"
                       >
                         See more
@@ -813,25 +822,38 @@ function Home() {
                 <AppIcon name="x" className="h-5 w-5" />
               </button>
             </div>
-            {getPostImages(selectedPESOPost).length > 0 && (
+            {selectedPostMedia.length > 0 && (
               <div className="relative flex min-h-64 items-center justify-center bg-slate-950 p-3 sm:min-h-[28rem] sm:p-5">
-                <img
-                  src={getPostImages(selectedPESOPost)[viewingImageIndex % getPostImages(selectedPESOPost).length]}
-                  alt={`${selectedPESOPost.title}, image ${(viewingImageIndex % getPostImages(selectedPESOPost).length) + 1}`}
-                  className="max-h-[65vh] max-w-full object-contain"
-                />
-                {getPostImages(selectedPESOPost).length > 1 && (
+                {selectedPostMedia[viewingImageIndex % selectedPostMedia.length].type === "image" ? (
+                  <img
+                    src={selectedPostMedia[viewingImageIndex % selectedPostMedia.length].url}
+                    alt={`${selectedPESOPost.title}, media ${(viewingImageIndex % selectedPostMedia.length) + 1}`}
+                    className="max-h-[65vh] max-w-full object-contain"
+                  />
+                ) : (
+                  <video
+                    key={selectedPostMedia[viewingImageIndex % selectedPostMedia.length].url}
+                    src={selectedPostMedia[viewingImageIndex % selectedPostMedia.length].url}
+                    controls
+                    autoPlay
+                    playsInline
+                    preload="metadata"
+                    aria-label={`${selectedPESOPost.title}, video ${(viewingImageIndex % selectedPostMedia.length) + 1}`}
+                    className="max-h-[65vh] max-w-full object-contain"
+                  />
+                )}
+                {selectedPostMedia.length > 1 && (
                   <>
                     <button
                       type="button"
                       onClick={() =>
                         setViewingImageIndex(
                           (index) =>
-                            (index - 1 + getPostImages(selectedPESOPost).length) %
-                            getPostImages(selectedPESOPost).length,
+                            (index - 1 + selectedPostMedia.length) %
+                            selectedPostMedia.length,
                         )
                       }
-                      aria-label="Previous image"
+                      aria-label="Previous media"
                       className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white transition hover:bg-white/25"
                     >
                       <AppIcon name="arrowLeft" className="h-5 w-5" />
@@ -840,10 +862,10 @@ function Home() {
                       type="button"
                       onClick={() =>
                         setViewingImageIndex(
-                          (index) => (index + 1) % getPostImages(selectedPESOPost).length,
+                          (index) => (index + 1) % selectedPostMedia.length,
                         )
                       }
-                      aria-label="Next image"
+                      aria-label="Next media"
                       className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white transition hover:bg-white/25"
                     >
                       <AppIcon name="arrowRight" className="h-5 w-5" />
@@ -851,22 +873,8 @@ function Home() {
                   </>
                 )}
                 <span className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-3 py-1 text-xs font-medium text-white">
-                  {(viewingImageIndex % getPostImages(selectedPESOPost).length) + 1} / {getPostImages(selectedPESOPost).length}
+                  {(viewingImageIndex % selectedPostMedia.length) + 1} / {selectedPostMedia.length}
                 </span>
-              </div>
-            )}
-            {getPostVideos(selectedPESOPost).length > 0 && (
-              <div className="grid gap-3 bg-slate-950 p-3 sm:grid-cols-2 sm:p-5">
-                {getPostVideos(selectedPESOPost).map((videoUrl, index) => (
-                  <video
-                    key={videoUrl}
-                    src={videoUrl}
-                    controls
-                    preload="metadata"
-                    aria-label={`PESO post video ${index + 1}`}
-                    className="max-h-[60vh] w-full rounded-xl bg-black object-contain"
-                  />
-                ))}
               </div>
             )}
             <div className="p-5 sm:p-7">
@@ -888,55 +896,68 @@ function Home() {
         </div>
       )}
 
-      {viewingImages && viewingImages.length > 0 && (
+      {viewingMedia && viewingMedia.length > 0 && (
         <div
           className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/95 p-3 sm:p-6"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setViewingImages(null);
+            if (event.target === event.currentTarget) setViewingMedia(null);
           }}
           role="dialog"
           aria-modal="true"
-          aria-label={`Image ${viewingImageIndex + 1} of ${viewingImages.length}`}
+          aria-label={`${viewingMedia[viewingImageIndex].type} ${viewingImageIndex + 1} of ${viewingMedia.length}`}
         >
           <button
             type="button"
-            onClick={() => setViewingImages(null)}
+            onClick={() => setViewingMedia(null)}
             aria-label="Close image viewer"
             className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
           >
             <AppIcon name="x" className="h-5 w-5" />
           </button>
-          {viewingImages.length > 1 && (
+          {viewingMedia.length > 1 && (
             <button
               type="button"
               onClick={() =>
                 setViewingImageIndex(
-                  (index) => (index - 1 + viewingImages.length) % viewingImages.length,
+                  (index) =>                   (index - 1 + viewingMedia.length) % viewingMedia.length,
                 )
               }
-              aria-label="Previous image"
+              aria-label="Previous media"
               className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 sm:left-6"
             >
               <AppIcon name="arrowLeft" className="h-5 w-5" />
             </button>
           )}
           <figure className="flex max-h-full max-w-full flex-col items-center gap-3">
-            <img
-              src={viewingImages[viewingImageIndex]}
-              alt={`PESO post image ${viewingImageIndex + 1}`}
-              className="max-h-[88vh] max-w-[92vw] object-contain"
-            />
+            {viewingMedia[viewingImageIndex].type === "image" ? (
+              <img
+                src={viewingMedia[viewingImageIndex].url}
+                alt={`PESO post image ${viewingImageIndex + 1}`}
+                className="max-h-[88vh] max-w-[92vw] object-contain"
+              />
+            ) : (
+              <video
+                key={viewingMedia[viewingImageIndex].url}
+                src={viewingMedia[viewingImageIndex].url}
+                controls
+                autoPlay
+                playsInline
+                preload="metadata"
+                aria-label={`PESO post video ${viewingImageIndex + 1}`}
+                className="max-h-[88vh] max-w-[92vw] object-contain"
+              />
+            )}
             <figcaption className="text-sm text-white/80">
-              {viewingImageIndex + 1} / {viewingImages.length}
+              {viewingImageIndex + 1} / {viewingMedia.length}
             </figcaption>
           </figure>
-          {viewingImages.length > 1 && (
+          {viewingMedia.length > 1 && (
             <button
               type="button"
               onClick={() =>
-                setViewingImageIndex((index) => (index + 1) % viewingImages.length)
+                setViewingImageIndex((index) => (index + 1) % viewingMedia.length)
               }
-              aria-label="Next image"
+              aria-label="Next media"
               className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 sm:right-6"
             >
               <AppIcon name="arrowRight" className="h-5 w-5" />
