@@ -336,9 +336,7 @@ export default function Captcha({
   }, [resetKey]);
 
   return (
-    <div
-      className={`flex min-h-[80px] flex-col items-center justify-center ${className}`}
-    >
+    <div className={className}>
       <div ref={containerRef} />
 
       {error && (

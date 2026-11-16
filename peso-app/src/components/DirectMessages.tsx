@@ -692,7 +692,7 @@ export default function DirectMessages({
                       }`}
                     >
                       {canDeleteMessage && (
-                        <div className="relative mt-1 shrink-0">
+                        <div className="relative shrink-0 self-center">
                           <button
                             type="button"
                             aria-label="Message options"
