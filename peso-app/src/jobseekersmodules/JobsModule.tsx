@@ -1220,8 +1220,17 @@ export default function JobsModule({
             role="dialog"
             aria-modal="true"
             aria-labelledby="application-form-title"
-            className="my-auto max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl sm:p-8"
+            className="relative my-auto max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl sm:p-8"
           >
+            <button
+              type="button"
+              onClick={() => setApplicationJob(null)}
+              disabled={applicationSubmitting}
+              aria-label="Close application form"
+              className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-slate-500 shadow-sm transition hover:bg-slate-100 disabled:opacity-50"
+            >
+              <AppIcon name="x" className="h-5 w-5" />
+            </button>
             {!applicationSubmitted && applicationJob.imageUrl && (
               <div className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
                 <img
@@ -1259,7 +1268,7 @@ export default function JobsModule({
               </div>
             ) : (
               <>
-                <div className="mb-6 flex items-start justify-between gap-4">
+                <div className="mb-6">
                   <div>
                     <p className="inline-flex items-center gap-1.5 text-sm font-bold text-blue-700">
                       {applicationJob.company}
@@ -1282,15 +1291,6 @@ export default function JobsModule({
                       Confirm your contact details and resume before submitting.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setApplicationJob(null)}
-                    disabled={applicationSubmitting}
-                    aria-label="Close application form"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
-                  >
-                    <AppIcon name="x" className="h-5 w-5" />
-                  </button>
                 </div>
 
                 <form onSubmit={submitApplication} className="space-y-4">

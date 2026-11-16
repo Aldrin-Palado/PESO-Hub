@@ -738,6 +738,7 @@ export default function EmployerDashboard() {
 
   const handleSaveRegistrationDetails = async (
     details: Record<string, unknown>,
+    companyDescription: string,
   ) => {
     if (!profile?.user_id) {
       throw new Error("Employer profile is not available.");
@@ -759,6 +760,7 @@ export default function EmployerDashboard() {
       registration_details: {
         ...details,
       },
+      company_description: companyDescription.trim() || null,
       verification_details_reviewed_at: new Date().toISOString(),
       industry: industries.join(", ") || null,
       website: text("website").trim() || null,
@@ -952,8 +954,6 @@ export default function EmployerDashboard() {
             <CompanyProfileModule
               profile={companyProfile}
               onSave={handleSaveCompanyProfile}
-              onEditProfile={() => setIsEmployerProfileEditing(true)}
-              onCancelEdit={() => setIsEmployerProfileEditing(false)}
             />
             <EmployerRegistrationProfileModule
               profile={{
@@ -964,6 +964,7 @@ export default function EmployerDashboard() {
                 address: profile.address,
                 contact_person: profile.contact_person,
                 contact_no: profile.contact_no,
+                company_description: profile.company_description,
                 industry: profile.industry,
                 website: profile.website,
                 is_verified: profile.is_verified,
@@ -971,6 +972,7 @@ export default function EmployerDashboard() {
               registrationDetails={profile.registration_details}
               verificationDocuments={profile.verification_documents}
               onSave={handleSaveRegistrationDetails}
+              onEditStart={() => setIsEmployerProfileEditing(true)}
               isEditing={isEmployerProfileEditing}
               onEditComplete={() => setIsEmployerProfileEditing(false)}
               onDocumentsSaved={(documents: EmployerVerificationDocument[]) =>

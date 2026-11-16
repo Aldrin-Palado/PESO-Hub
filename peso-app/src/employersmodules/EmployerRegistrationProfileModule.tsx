@@ -51,6 +51,7 @@ type EmployerProfile = {
   address: string | null;
   contact_person: string | null;
   contact_no: string | null;
+  company_description: string | null;
   industry: string | null;
   website: string | null;
   is_verified?: boolean;
@@ -60,8 +61,12 @@ type Props = {
   profile: EmployerProfile;
   registrationDetails: unknown;
   verificationDocuments: unknown;
-  onSave: (details: Record<string, unknown>) => Promise<void>;
+  onSave: (
+    details: Record<string, unknown>,
+    companyDescription: string,
+  ) => Promise<void>;
   onDocumentsSaved: (documents: EmployerVerificationDocument[]) => void;
+  onEditStart: () => void;
   isEditing: boolean;
   onEditComplete: () => void;
 };
@@ -181,6 +186,7 @@ export default function EmployerRegistrationProfileModule({
   verificationDocuments,
   onSave,
   onDocumentsSaved,
+  onEditStart,
   isEditing,
   onEditComplete,
 }: Props) {
@@ -195,14 +201,19 @@ export default function EmployerRegistrationProfileModule({
   const [success, setSuccess] = useState("");
   const [registrationDetailsOpen, setRegistrationDetailsOpen] = useState(false);
   const [sectionToFocus, setSectionToFocus] = useState<string | null>(null);
+  const [companyDescription, setCompanyDescription] = useState(
+    profile.company_description ?? "",
+  );
 
   useEffect(() => {
     if (isEditing) return;
     setForm(getInitialDetails(registrationDetails, profile));
+    setCompanyDescription(profile.company_description ?? "");
     setConsentAccepted(
       asRecord(asRecord(registrationDetails).certification).consent_accepted === true,
     );
   }, [
+    profile.company_description,
     profile.contact_no,
     profile.contact_person,
     profile.email,
@@ -282,6 +293,7 @@ export default function EmployerRegistrationProfileModule({
 
   const cancelChanges = () => {
     setForm(getInitialDetails(registrationDetails, profile));
+    setCompanyDescription(profile.company_description ?? "");
     setConsentAccepted(
       asRecord(asRecord(registrationDetails).certification).consent_accepted === true,
     );
@@ -385,7 +397,7 @@ export default function EmployerRegistrationProfileModule({
 
     setSaving(true);
     try {
-      await onSave(details);
+      await onSave(details, companyDescription.trim());
       setSuccess("Employer registration profile saved.");
       onEditComplete();
     } catch (saveError) {
@@ -510,6 +522,20 @@ export default function EmployerRegistrationProfileModule({
       {success && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{success}</p>}
 
       {registrationDetailsOpen && <div id="employer-registration-details" className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-slate-500">
+          Review and update the information used for your employer profile.
+        </p>
+        {!isEditing && (
+          <button
+            type="button"
+            onClick={onEditStart}
+            className="self-start rounded-xl bg-[#0759AE] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#064A91] sm:self-auto"
+          >
+            Edit Registration Details
+          </button>
+        )}
+      </div>
       <form
         id="employer-screening-details-form"
         onSubmit={(event) => void handleSubmit(event)}
@@ -536,6 +562,25 @@ export default function EmployerRegistrationProfileModule({
             </label>
             <label className={`${labelClass} sm:col-span-2`}>Company Address
               <input value={profile.address ?? ""} placeholder="Not provided" readOnly className={`${inputClass} bg-slate-50`} />
+            </label>
+            <label htmlFor="employer-company-description" className={`${labelClass} sm:col-span-2`}>
+              Company Description
+              <AutoResizeTextarea
+                id="employer-company-description"
+                rows={5}
+                maxLength={3000}
+                value={companyDescription}
+                onChange={(event) => {
+                  setCompanyDescription(event.target.value);
+                  setError("");
+                  setSuccess("");
+                }}
+                placeholder="Describe your company, services, and workplace..."
+                className={inputClass}
+              />
+              <span className="mt-1 block text-right text-xs font-normal text-slate-400">
+                {companyDescription.length}/3000 characters
+              </span>
             </label>
           </div>
         </section>
