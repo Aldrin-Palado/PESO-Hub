@@ -714,15 +714,15 @@ export default function DirectMessages({
                               className="h-4 w-4"
                               fill="currentColor"
                             >
-                              <circle cx="5" cy="12" r="1.75" />
+                              <circle cx="12" cy="5" r="1.75" />
                               <circle cx="12" cy="12" r="1.75" />
-                              <circle cx="19" cy="12" r="1.75" />
+                              <circle cx="12" cy="19" r="1.75" />
                             </svg>
                           </button>
                           {openMessageMenuId === message.message_id && (
                             <div
                               role="menu"
-                              className="absolute left-0 top-full z-10 mt-1 min-w-28 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+                              className="absolute right-full top-1/2 z-10 mr-1 min-w-28 -translate-y-1/2 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
                             >
                               <button
                                 type="button"
