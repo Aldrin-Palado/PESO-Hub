@@ -122,9 +122,25 @@ export default function HomeModule({
       setPostsLoading(false);
     };
 
+    const channel = supabase
+      .channel(`job-seeker-peso-posts-${seeker.job_seeker_id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "peso_posts" },
+        () => void loadPESOPosts(),
+      )
+      .subscribe((status, error) => {
+        if (status === "SUBSCRIBED") {
+          void loadPESOPosts();
+        } else if (error) {
+          console.error("Could not subscribe to PESO post updates:", error);
+        }
+      });
+
     void loadPESOPosts();
     return () => {
       active = false;
+      void supabase.removeChannel(channel);
     };
   }, [seeker.job_seeker_id]);
 
@@ -152,9 +168,25 @@ export default function HomeModule({
       setAnnouncementsLoading(false);
     };
 
+    const channel = supabase
+      .channel(`job-seeker-peso-announcements-${seeker.job_seeker_id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "peso_announcements" },
+        () => void loadAnnouncements(),
+      )
+      .subscribe((status, error) => {
+        if (status === "SUBSCRIBED") {
+          void loadAnnouncements();
+        } else if (error) {
+          console.error("Could not subscribe to PESO announcement updates:", error);
+        }
+      });
+
     void loadAnnouncements();
     return () => {
       active = false;
+      void supabase.removeChannel(channel);
     };
   }, []);
 
@@ -389,8 +421,17 @@ export default function HomeModule({
                                 aria-hidden="true"
                                 className="h-52 w-full bg-slate-950 object-contain"
                               />
-                              <span className="absolute inset-0 flex items-center justify-center text-4xl text-white drop-shadow">
-                                &#9654;
+                              <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/10 transition group-hover:bg-slate-950/20">
+                                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 text-blue-600 shadow-xl ring-1 ring-white/70 backdrop-blur-sm transition-transform duration-200 group-hover:scale-110">
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    fill="currentColor"
+                                    aria-hidden="true"
+                                    className="ml-0.5 h-7 w-7"
+                                  >
+                                    <path d="M7 4.75v14.5L19 12 7 4.75Z" />
+                                  </svg>
+                                </span>
                               </span>
                             </>
                           )}

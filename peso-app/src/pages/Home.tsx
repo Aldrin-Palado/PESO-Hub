@@ -151,9 +151,25 @@ function Home() {
       setPostsLoading(false);
     };
 
+    const channel = supabase
+      .channel("public-home-peso-posts")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "peso_posts" },
+        () => void loadPESOPosts(),
+      )
+      .subscribe((status, error) => {
+        if (status === "SUBSCRIBED") {
+          void loadPESOPosts();
+        } else if (error) {
+          console.error("Could not subscribe to PESO post updates:", error);
+        }
+      });
+
     void loadPESOPosts();
     return () => {
       cancelled = true;
+      void supabase.removeChannel(channel);
     };
   }, []);
 
@@ -178,9 +194,25 @@ function Home() {
       setAnnouncementsLoading(false);
     };
 
+    const channel = supabase
+      .channel("public-home-peso-announcements")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "peso_announcements" },
+        () => void loadAnnouncements(),
+      )
+      .subscribe((status, error) => {
+        if (status === "SUBSCRIBED") {
+          void loadAnnouncements();
+        } else if (error) {
+          console.error("Could not subscribe to PESO announcement updates:", error);
+        }
+      });
+
     void loadAnnouncements();
     return () => {
       cancelled = true;
+      void supabase.removeChannel(channel);
     };
   }, []);
 
@@ -408,8 +440,17 @@ function Home() {
                               />
                             )}
                             {media.type === "video" && (
-                              <span className="absolute inset-0 flex items-center justify-center text-4xl text-white drop-shadow">
-                                &#9654;
+                              <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/10 transition group-hover:bg-slate-950/20">
+                                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 text-sky-600 shadow-xl ring-1 ring-white/70 backdrop-blur-sm transition-transform duration-200 group-hover:scale-110">
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    fill="currentColor"
+                                    aria-hidden="true"
+                                    className="ml-0.5 h-7 w-7"
+                                  >
+                                    <path d="M7 4.75v14.5L19 12 7 4.75Z" />
+                                  </svg>
+                                </span>
                               </span>
                             )}
                             {index === 3 && getPostMedia(post).length > 4 && (
