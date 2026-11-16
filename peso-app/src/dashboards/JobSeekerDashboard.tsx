@@ -654,6 +654,8 @@ export default function JobSeekerDashboard() {
 
       setSeeker({ ...seeker, ...data });
       setEditingScreening(false);
+      setEditingResume(false);
+      setResumeFile(null);
       setProfileSuccess("Your screening details have been updated.");
     } catch (saveError) {
       console.error("Job seeker screening details update error:", saveError);
@@ -761,7 +763,7 @@ export default function JobSeekerDashboard() {
     }
   };
 
-  const openResume = async () => {
+  const handleResumeAction = async (download: boolean) => {
     if (!seeker?.resume_url || openingResume) return;
 
     setOpeningResume(true);
@@ -770,7 +772,9 @@ export default function JobSeekerDashboard() {
     try {
       const { data, error: signedUrlError } = await supabase.storage
         .from("Resume Files")
-        .createSignedUrl(seeker.resume_url, 60, { download: true });
+        .createSignedUrl(seeker.resume_url, 60, {
+          download: download ? getResumeFileName(seeker.resume_url) : false,
+        });
 
       if (signedUrlError) throw signedUrlError;
 
@@ -780,11 +784,16 @@ export default function JobSeekerDashboard() {
       link.rel = "noopener noreferrer";
       link.click();
     } catch (openError) {
-      console.error("Resume download error:", openError);
+      console.error(
+        download ? "Resume download error:" : "Resume view error:",
+        openError,
+      );
       setResumeError(
         openError instanceof Error
           ? openError.message
-          : "Unable to open your resume. Please try again.",
+          : download
+            ? "Unable to download your resume. Please try again."
+            : "Unable to view your resume. Please try again.",
       );
     } finally {
       setOpeningResume(false);
@@ -928,7 +937,11 @@ export default function JobSeekerDashboard() {
             <button
               type="button"
               onClick={() => {
-                if (screeningDetailsOpen && editingScreening) setEditingScreening(false);
+                if (screeningDetailsOpen && editingScreening) {
+                  setEditingScreening(false);
+                  setEditingResume(false);
+                  setResumeFile(null);
+                }
                 setScreeningDetailsOpen((open) => !open);
               }}
               aria-expanded={screeningDetailsOpen}
@@ -1282,7 +1295,11 @@ export default function JobSeekerDashboard() {
             <div className="flex justify-end gap-3 border-t border-slate-100 px-6 py-5">
               <button
                 type="button"
-                onClick={() => setEditingScreening(false)}
+                onClick={() => {
+                  setEditingScreening(false);
+                  setEditingResume(false);
+                  setResumeFile(null);
+                }}
                 disabled={savingScreening}
                 className="rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
               >
@@ -1313,7 +1330,19 @@ export default function JobSeekerDashboard() {
                     <h3 className="text-base font-bold text-[#123B70]">Resume / CV</h3>
                     <p className="mt-1 text-xs text-slate-600">
                       {seeker.resume_url
-                        ? `Uploaded file: ${getResumeFileName(seeker.resume_url)}`
+                        ? (
+                          <>
+                            Uploaded file:{" "}
+                            <button
+                              type="button"
+                              onClick={() => void handleResumeAction(false)}
+                              disabled={openingResume}
+                              className="font-medium text-[#0759AE] underline decoration-[#0759AE]/50 underline-offset-2 hover:text-[#064A91] disabled:cursor-wait disabled:opacity-60"
+                            >
+                              {getResumeFileName(seeker.resume_url)}
+                            </button>
+                          </>
+                        )
                         : `Upload your updated resume (${RESUME_FORMATS_LABEL}, up to 5 MB).`}
                     </p>
                   </div>
@@ -1322,25 +1351,27 @@ export default function JobSeekerDashboard() {
                   {seeker.resume_url && (
                     <button
                       type="button"
-                      onClick={() => void openResume()}
+                      onClick={() => void handleResumeAction(true)}
                       disabled={openingResume}
                       className="inline-flex items-center gap-2 rounded-xl border border-blue-300 px-4 py-2.5 text-sm font-semibold text-[#0759AE] hover:bg-blue-50 disabled:opacity-50"
                     >
-                      {openingResume ? "Preparing..." : "View Resume"}
+                      {openingResume ? "Preparing..." : "Download"}
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingResume((editing) => !editing);
-                      setResumeError("");
-                      setResumeSuccess("");
-                    }}
-                    aria-expanded={editingResume}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#0759AE] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#064A91]"
-                  >
-                    {editingResume ? "Cancel" : seeker.resume_url ? "Replace Resume" : "Upload Resume"}
-                  </button>
+                  {editingScreening && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingResume((editing) => !editing);
+                        setResumeError("");
+                        setResumeSuccess("");
+                      }}
+                      aria-expanded={editingResume}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[#0759AE] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#064A91]"
+                    >
+                      {editingResume ? "Cancel" : seeker.resume_url ? "Replace Resume" : "Upload Resume"}
+                    </button>
+                  )}
                 </div>
               </div>
               {resumeError && (
@@ -1353,7 +1384,7 @@ export default function JobSeekerDashboard() {
                   {resumeSuccess}
                 </p>
               )}
-              {editingResume && (
+              {editingScreening && editingResume && (
                 <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
                   <p className="text-sm text-slate-500">
                     {seeker.resume_url
