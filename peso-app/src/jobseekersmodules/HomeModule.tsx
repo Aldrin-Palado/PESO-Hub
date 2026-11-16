@@ -351,13 +351,13 @@ export default function HomeModule({
             There are no posts at the moment.
           </p>
         ) : (
-          <div className="grid gap-4">
+          <div className="grid gap-6">
             {pesoPosts.map((post) => {
               const postMedia = getPostMedia(post);
               return (
                 <article
                   key={post.id}
-                  className="overflow-hidden rounded-xl border border-gray-200 bg-white"
+                  className="overflow-hidden rounded-2xl border border-gray-300 bg-white shadow-md ring-1 ring-gray-900/5 transition hover:shadow-lg"
                 >
                   {postMedia.length > 0 && (
                     <div className={`grid gap-1 ${postMedia.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>

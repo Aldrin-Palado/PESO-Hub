@@ -367,11 +367,11 @@ function Home() {
               </p>
             </div>
           ) : (
-            <div className="grid gap-5">
+            <div className="grid gap-7">
               {pesoPosts.map((post) => (
                   <article
                     key={post.id}
-                    className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition before:absolute before:inset-y-0 before:left-0 before:z-10 before:w-1 before:bg-gradient-to-b before:from-yellow-400 before:to-red-500 before:content-[''] hover:shadow-md"
+                    className="relative overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-md ring-1 ring-slate-900/5 transition before:absolute before:inset-y-0 before:left-0 before:z-10 before:w-1 before:bg-gradient-to-b before:from-yellow-400 before:to-red-500 before:content-[''] hover:shadow-lg"
                   >
                     {getPostMedia(post).length > 0 && (
                       <div className={`grid gap-1 ${getPostMedia(post).length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
