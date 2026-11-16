@@ -908,6 +908,7 @@ export default function EmployerDashboard() {
     website: profile.website,
     contact_person: profile.contact_person || "",
     company_logo_url: profile.logo_url,
+    is_verified: profile.is_verified,
   };
 
   /* =========================

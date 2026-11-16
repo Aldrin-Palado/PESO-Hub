@@ -705,18 +705,20 @@ function Login() {
             </form>
 
             {/* Registration */}
-            <div className="mt-8 pt-2 text-center">
-              <p className="text-sm text-slate-500">
-                Don’t have an account?{" "}
+            {authStep === "credentials" && (
+              <div className="mt-8 pt-2 text-center">
+                <p className="text-sm text-slate-500">
+                  Don’t have an account?{" "}
 
-                <Link
-                  to="/register"
-                  className="font-semibold text-[#315FEA] underline decoration-[#315FEA]/40 underline-offset-4 transition hover:text-[#123B70]"
-                >
-                  Create an account
-                </Link>
-              </p>
-            </div>
+                  <Link
+                    to="/register"
+                    className="font-semibold text-[#315FEA] underline decoration-[#315FEA]/40 underline-offset-4 transition hover:text-[#123B70]"
+                  >
+                    Create an account
+                  </Link>
+                </p>
+              </div>
+            )}
 
             <p className="mt-4 text-center text-xs leading-5 text-slate-500">
               Your information is protected and used only to provide

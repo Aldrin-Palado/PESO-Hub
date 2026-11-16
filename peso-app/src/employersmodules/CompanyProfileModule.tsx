@@ -19,6 +19,7 @@ interface CompanyProfile {
   website?: string | null;
   contact_person?: string | null;
   company_logo_url?: string | null;
+  is_verified?: boolean;
 }
 
 interface CompanyProfileModuleProps {
@@ -198,9 +199,9 @@ export default function CompanyProfileModule({
               onClick={() => logoInputRef.current?.click()}
               disabled={isSaving}
               aria-label={isSaving ? "Saving company logo" : "Change company logo"}
-              className="relative block rounded-2xl text-[#0446A7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#123B70] disabled:cursor-wait disabled:opacity-70"
+              className="relative block rounded-full text-[#0446A7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#123B70] disabled:cursor-wait disabled:opacity-70"
             >
-              <span className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white text-2xl font-black shadow-sm">
+              <span className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-[#123B70] text-2xl font-black text-white shadow-md ring-1 ring-slate-200">
                 {logoSrc ? (
                   <img
                     src={logoSrc}
@@ -230,19 +231,23 @@ export default function CompanyProfileModule({
                 )}
               </span>
             </button>
-            <p className="mt-1 text-center text-xs text-slate-500">JPG, PNG, or WebP; max 5 MB</p>
           </div>
 
           <div className="min-w-0">
-            <h2 className="break-words text-xl font-black text-[#123B70] sm:text-2xl">
+            <h2 className="flex min-w-0 items-center gap-2 break-words text-xl font-black text-[#123B70] sm:text-2xl">
               {formData.company_name || "Company Name"}
+              {formData.is_verified && (
+                <span
+                  title="Verified employer"
+                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"
+                >
+                  <AppIcon name="check" className="h-3.5 w-3.5" />
+                </span>
+              )}
             </h2>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-[#0759AE]">
                 Employer
-              </span>
-              <span className="text-sm text-slate-500">
-                {formData.industry || "Industry not specified"}
               </span>
             </div>
           </div>

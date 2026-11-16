@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../services/supabase";
-import { openStoredResume } from "../services/resumes";
+import { getResumeFileName, openStoredResume } from "../services/resumes";
 import { getApplicationStatusStyles } from "../utils/applicationStatusStyles";
 
 type Seeker = {
@@ -498,19 +498,34 @@ export default function ApplicationsModule({
               </p>
             )}
 
+            {selectedApplication.resumeUrl && (
+              <div className="mt-5">
+                <button
+                  type="button"
+                  onClick={() => void handleOpenResume()}
+                  disabled={openingResume}
+                  className="max-w-full truncate rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-left text-sm font-semibold text-blue-800 hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {openingResume
+                    ? "Opening..."
+                    : `View ${getResumeFileName(selectedApplication.resumeUrl)}`}
+                </button>
+              </div>
+            )}
+
             {selectedApplication.qualificationFiles.length > 0 && (
               <section className="mt-5">
                 <h3 className="text-sm font-semibold text-gray-800">
                   Qualifications and requirements documents
                 </h3>
-                <div className="mt-2 flex flex-wrap gap-2">
+                <div className="mt-2 flex flex-col items-start gap-2">
                   {selectedApplication.qualificationFiles.map((document) => (
                     <button
                       key={document.path}
                       type="button"
                       onClick={() => void handleOpenQualificationFile(document)}
                       disabled={openingResume}
-                      className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
+                      className="max-w-full truncate rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-left text-sm font-semibold text-blue-800 hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
                     >
                       {openingResume ? "Opening..." : `View ${document.name}`}
                     </button>
@@ -520,16 +535,6 @@ export default function ApplicationsModule({
             )}
 
             <footer className="mt-5 flex flex-wrap justify-end gap-3">
-              {selectedApplication.resumeUrl && (
-                <button
-                  type="button"
-                  onClick={() => void handleOpenResume()}
-                  disabled={openingResume}
-                  className="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60"
-                >
-                  {openingResume ? "Opening resume..." : "View submitted resume"}
-                </button>
-              )}
               <button
                 type="button"
                 onClick={() => setSelectedApplication(null)}
