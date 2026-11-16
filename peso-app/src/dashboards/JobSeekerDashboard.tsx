@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { renderAsync } from "docx-preview";
 import AppIcon from "../components/AppIcon";
 import AutoResizeTextarea from "../components/AutoResizeTextarea";
 import ESignatureInput from "../components/ESignatureInput";
@@ -61,6 +62,12 @@ type JobSeekerNotification = {
   created_at: string;
   sender_label: string;
 };
+
+type ResumePreview =
+  | { format: "pdf"; url: string }
+  | { format: "docx"; data: ArrayBuffer }
+  | { format: "csv"; content: string }
+  | { format: "unsupported"; fileName: string };
 
 type MessageContactSummary = {
   user_id: string;
@@ -370,6 +377,10 @@ export default function JobSeekerDashboard() {
   const [openingResume, setOpeningResume] = useState(false);
   const [resumeError, setResumeError] = useState("");
   const [resumeSuccess, setResumeSuccess] = useState("");
+  const [resumePreview, setResumePreview] = useState<ResumePreview | null>(null);
+  const [resumePreviewError, setResumePreviewError] = useState("");
+  const docxPreviewContainer = useRef<HTMLDivElement>(null);
+  const docxPreviewStyles = useRef<HTMLDivElement>(null);
   // =====================================================
   // LOAD CURRENT JOB SEEKER
   // =====================================================
@@ -394,13 +405,41 @@ export default function JobSeekerDashboard() {
 
     const animationFrame = window.requestAnimationFrame(() => {
       document
-        .getElementById(getScreeningSectionId(profileSectionToFocus))
+        .getElementById(
+          profileSectionToFocus === "Resume / CV"
+            ? "job-seeker-resume"
+            : getScreeningSectionId(profileSectionToFocus),
+        )
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
       setProfileSectionToFocus(null);
     });
 
     return () => window.cancelAnimationFrame(animationFrame);
   }, [profileSectionToFocus, screeningDetailsOpen]);
+
+  useEffect(() => {
+    if (resumePreview?.format !== "docx") return;
+
+    const body = docxPreviewContainer.current;
+    const styles = docxPreviewStyles.current;
+    if (!body || !styles) return;
+
+    let active = true;
+    body.replaceChildren();
+    styles.replaceChildren();
+    void renderAsync(resumePreview.data, body, styles).catch((previewError: unknown) => {
+      console.error("Could not render DOCX resume preview:", previewError);
+      if (active) {
+        setResumePreviewError("This DOCX file could not be previewed.");
+      }
+    });
+
+    return () => {
+      active = false;
+      body.replaceChildren();
+      styles.replaceChildren();
+    };
+  }, [resumePreview]);
 
   useEffect(() => {
     if (!seeker?.user_id) return;
@@ -591,9 +630,8 @@ export default function JobSeekerDashboard() {
 
   const openRegistrationTask = (task: string) => {
     if (task === "Resume / CV") {
-      document
-        .getElementById("job-seeker-resume")
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setProfileSectionToFocus(task);
+      setScreeningDetailsOpen(true);
       return;
     }
 
@@ -763,43 +801,81 @@ export default function JobSeekerDashboard() {
     }
   };
 
-  const handleResumeAction = async (download: boolean) => {
+  const previewResume = async () => {
     if (!seeker?.resume_url || openingResume) return;
 
     setOpeningResume(true);
     setResumeError("");
+    setResumePreviewError("");
 
     try {
       const { data, error: signedUrlError } = await supabase.storage
         .from("Resume Files")
-        .createSignedUrl(seeker.resume_url, 60, {
-          download: download ? getResumeFileName(seeker.resume_url) : false,
-        });
+        .createSignedUrl(seeker.resume_url, 60);
 
       if (signedUrlError) throw signedUrlError;
 
-      const link = document.createElement("a");
-      link.href = data.signedUrl;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.click();
-    } catch (openError) {
-      console.error(
-        download ? "Resume download error:" : "Resume view error:",
-        openError,
-      );
+      const fileName = getResumeFileName(seeker.resume_url);
+      const extension = getResumeExtension(fileName);
+      if (extension === "pdf") {
+        setResumePreview({ format: "pdf", url: data.signedUrl });
+      } else if (extension === "docx" || extension === "csv") {
+        const response = await fetch(data.signedUrl);
+        if (!response.ok) {
+          throw new Error("Unable to load your resume preview. Please try again.");
+        }
+        if (extension === "docx") {
+          setResumePreview({
+            format: "docx",
+            data: await response.arrayBuffer(),
+          });
+        } else {
+          setResumePreview({ format: "csv", content: await response.text() });
+        }
+      } else {
+        setResumePreview({ format: "unsupported", fileName });
+      }
+    } catch (previewError) {
+      console.error("Resume preview error:", previewError);
       setResumeError(
-        openError instanceof Error
-          ? openError.message
-          : download
-            ? "Unable to download your resume. Please try again."
-            : "Unable to view your resume. Please try again.",
+        previewError instanceof Error
+          ? previewError.message
+          : "Unable to view your resume. Please try again.",
       );
     } finally {
       setOpeningResume(false);
     }
   };
 
+  const downloadResume = async () => {
+    if (!seeker?.resume_url || openingResume) return;
+
+    setOpeningResume(true);
+    setResumeError("");
+
+    try {
+      const fileName = getResumeFileName(seeker.resume_url);
+      const { data, error: signedUrlError } = await supabase.storage
+        .from("Resume Files")
+        .createSignedUrl(seeker.resume_url, 60, { download: fileName });
+
+      if (signedUrlError) throw signedUrlError;
+
+      const link = document.createElement("a");
+      link.href = data.signedUrl;
+      link.rel = "noopener noreferrer";
+      link.click();
+    } catch (downloadError) {
+      console.error("Resume download error:", downloadError);
+      setResumeError(
+        downloadError instanceof Error
+          ? downloadError.message
+          : "Unable to download your resume. Please try again.",
+      );
+    } finally {
+      setOpeningResume(false);
+    }
+  };
   // =====================================================
   // LOGOUT
   // =====================================================
@@ -1335,7 +1411,7 @@ export default function JobSeekerDashboard() {
                             Uploaded file:{" "}
                             <button
                               type="button"
-                              onClick={() => void handleResumeAction(false)}
+                              onClick={() => void previewResume()}
                               disabled={openingResume}
                               className="font-medium text-[#0759AE] underline decoration-[#0759AE]/50 underline-offset-2 hover:text-[#064A91] disabled:cursor-wait disabled:opacity-60"
                             >
@@ -1351,7 +1427,7 @@ export default function JobSeekerDashboard() {
                   {seeker.resume_url && (
                     <button
                       type="button"
-                      onClick={() => void handleResumeAction(true)}
+                      onClick={() => void downloadResume()}
                       disabled={openingResume}
                       className="inline-flex items-center gap-2 rounded-xl border border-blue-300 px-4 py-2.5 text-sm font-semibold text-[#0759AE] hover:bg-blue-50 disabled:opacity-50"
                     >
@@ -1418,6 +1494,68 @@ export default function JobSeekerDashboard() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {resumePreview && seeker.resume_url && (
+            <div
+              className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-3 sm:p-6"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) setResumePreview(null);
+              }}
+            >
+              <section
+                role="dialog"
+                aria-modal="true"
+                aria-label="Resume preview"
+                className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+              >
+                <header className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
+                  <h2 className="min-w-0 truncate font-bold text-[#123B70]">
+                    {resumePreview.format === "unsupported"
+                      ? resumePreview.fileName
+                      : getResumeFileName(seeker.resume_url)}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResumePreview(null);
+                      setResumePreviewError("");
+                    }}
+                    className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Close
+                  </button>
+                </header>
+                {resumePreviewError && (
+                  <p role="alert" className="m-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">
+                    {resumePreviewError}
+                  </p>
+                )}
+                {resumePreview.format === "pdf" && (
+                  <iframe
+                    title="Resume PDF preview"
+                    src={resumePreview.url}
+                    className="min-h-0 flex-1"
+                  />
+                )}
+                {resumePreview.format === "docx" && (
+                  <div className="min-h-0 flex-1 overflow-auto bg-slate-100 p-4 sm:p-8">
+                    <div ref={docxPreviewStyles} className="hidden" />
+                    <div ref={docxPreviewContainer} className="mx-auto max-w-full" />
+                  </div>
+                )}
+                {resumePreview.format === "csv" && (
+                  <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-5 text-sm text-slate-800">
+                    {resumePreview.content}
+                  </pre>
+                )}
+                {resumePreview.format === "unsupported" && (
+                  <p className="p-6 text-sm text-slate-700">
+                    This file format cannot be previewed in the browser. Use the Download button to open it.
+                  </p>
+                )}
+              </section>
             </div>
           )}
         </section>
