@@ -7,13 +7,40 @@ import { supabase } from "../services/supabase";
 import AppIcon from "./AppIcon";
 import Captcha from "./Captcha";
 
-const googleLogo = new URL(
-  "../assets/images/google.png",
-  import.meta.url
-).href;
-
 type AuthStep = "credentials" | "captcha";
 type AuthMethod = "password" | "google";
+type GoogleCredentialResponse = { credential?: string };
+type GoogleButtonOptions = {
+  type: "standard";
+  theme: "outline";
+  size: "large";
+  text: "continue_with";
+  shape: "rectangular";
+  width: number;
+};
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (options: {
+            client_id: string;
+            callback: (response: GoogleCredentialResponse) => void;
+            auto_select: boolean;
+          }) => void;
+          renderButton: (
+            element: HTMLElement,
+            options: GoogleButtonOptions,
+          ) => void;
+        };
+      };
+    };
+  }
+}
+
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? "";
+const googleIdentityScriptUrl = "https://accounts.google.com/gsi/client";
 
 function Login() {
   const navigate = useNavigate();
@@ -39,9 +66,12 @@ function Login() {
   const [captchaResetKey, setCaptchaResetKey] = useState(0);
 
   const [error, setError] = useState("");
+  const [googleButtonError, setGoogleButtonError] = useState("");
 
   const authInProgressRef = useRef(false);
   const lastSubmittedCaptchaTokenRef = useRef("");
+  const googleButtonRef = useRef<HTMLDivElement>(null);
+  const googleIdTokenRef = useRef("");
 
   // Reset CAPTCHA and invalidate previous token.
   const resetCaptcha = () => {
@@ -50,15 +80,66 @@ function Login() {
     setCaptchaResetKey((current) => current + 1);
   };
 
-  // Display CAPTCHA after choosing an authentication method.
-  const showCaptcha = (method: AuthMethod) => {
-    if (loading || oauthLoading || authInProgressRef.current) return;
+  useEffect(() => {
+    const buttonContainer = googleButtonRef.current;
+    if (!buttonContainer) return;
+    if (!googleClientId) {
+      setGoogleButtonError(
+        "Google sign-in is not configured. Set VITE_GOOGLE_CLIENT_ID and rebuild the app.",
+      );
+      return;
+    }
 
-    setAuthMethod(method);
-    setError("");
-    resetCaptcha();
-    setAuthStep("captcha");
-  };
+    let active = true;
+    const script = document.createElement("script");
+    script.src = googleIdentityScriptUrl;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      if (!active || !window.google || !googleButtonRef.current) return;
+
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        auto_select: false,
+        callback: (response) => {
+          if (!response.credential) {
+            setGoogleButtonError("Google did not return an account token. Please try again.");
+            return;
+          }
+
+          googleIdTokenRef.current = response.credential;
+          setGoogleButtonError("");
+          setError("");
+          setAuthMethod("google");
+          setCaptchaToken("");
+          setCaptchaResetKey((current) => current + 1);
+          setAuthStep("captcha");
+        },
+      });
+      window.google.accounts.id.renderButton(buttonContainer, {
+        type: "standard",
+        theme: "outline",
+        size: "large",
+        text: "continue_with",
+        shape: "rectangular",
+        width: Math.min(
+          400,
+          Math.max(200, Math.round(buttonContainer.getBoundingClientRect().width)),
+        ),
+      });
+    };
+    script.onerror = () => {
+      if (active) {
+        setGoogleButtonError("Google sign-in could not be loaded. Please try again.");
+      }
+    };
+    document.head.appendChild(script);
+
+    return () => {
+      active = false;
+      script.remove();
+    };
+  }, []);
 
   // Extract Supabase Edge Function error.
   const getErrorMessage = async (
@@ -398,9 +479,16 @@ function Login() {
     }
   };
 
-  // Google OAuth after CAPTCHA verification.
+  // Authenticate the selected Google account only after CAPTCHA verification.
   const signInWithGoogle = async (verifiedCaptchaToken = captchaToken) => {
     if (authInProgressRef.current || loading || oauthLoading) return;
+
+    const googleIdToken = googleIdTokenRef.current;
+    if (!googleIdToken) {
+      setError("Select a Google account before completing the CAPTCHA.");
+      setAuthStep("credentials");
+      return;
+    }
 
     if (!verifiedCaptchaToken) {
       setError("Please complete the CAPTCHA verification.");
@@ -419,7 +507,6 @@ function Login() {
     setOauthLoading(true);
 
     try {
-      // Verify CAPTCHA before initiating Google OAuth.
       const { error: captchaError } = await supabase.functions.invoke(
         "captcha-auth",
         {
@@ -434,18 +521,18 @@ function Login() {
         throw new Error(await getErrorMessage(captchaError));
       }
 
-      // Initiate Google OAuth.
-      const { error: oauthError } =
-        await supabase.auth.signInWithOAuth({
+      const { data, error: googleError } =
+        await supabase.auth.signInWithIdToken({
           provider: "google",
-          options: {
-            redirectTo: `${window.location.origin}/auth/callback`,
-          },
+          token: googleIdToken,
         });
+      if (googleError) throw googleError;
+      if (!data.user) {
+        throw new Error("Google sign-in did not return an authenticated user.");
+      }
 
-      if (oauthError) throw oauthError;
-
-      // Browser redirects to Google.
+      googleIdTokenRef.current = "";
+      await routeAuthenticatedUser(data.user);
 
     } catch (err) {
       console.error("Google OAuth error:", err);
@@ -456,6 +543,7 @@ function Login() {
           : "Unable to sign in with Google. Please try again."
       );
 
+      await supabase.auth.signOut();
       resetCaptcha();
       setOauthLoading(false);
       authInProgressRef.current = false;
@@ -613,21 +701,17 @@ function Login() {
                   </div>
 
                   {/* Google OAuth */}
-                  <button
-                    type="button"
-                    onClick={() => showCaptcha("google")}
-                    disabled={loading || oauthLoading}
-                    className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D5DEEB] bg-white px-5 py-4 text-base font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
-                  >
-                    <img
-                      src={googleLogo}
-                      alt=""
-                      aria-hidden="true"
-                      className="h-9 w-9 object-contain"
+                  <div className="flex min-h-11 w-full justify-center">
+                    <div
+                      ref={googleButtonRef}
+                      className="w-full max-w-[25rem]"
                     />
-
-                    Continue with Google
-                  </button>
+                  </div>
+                  {googleButtonError && (
+                    <p role="alert" className="text-sm text-red-700">
+                      {googleButtonError}
+                    </p>
+                  )}
                 </>
               ) : (
                 <>
@@ -709,8 +793,8 @@ function Login() {
                       className="text-center text-sm font-medium text-slate-600"
                     >
                       {oauthLoading
-                        ? "Opening Google..."
-                        : "Complete the CAPTCHA to continue with Google automatically."}
+                        ? "Verifying CAPTCHA and signing you in..."
+                        : "Your Google account is selected. Complete the CAPTCHA to sign in automatically."}
                     </p>
                   )}
 
