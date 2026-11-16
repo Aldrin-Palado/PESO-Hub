@@ -1,8 +1,13 @@
 import { useMemo, useState } from "react";
 import { supabase } from "../services/supabase";
 import { getResumeFileName, openStoredResume } from "../services/resumes";
+import ApplicationArchiveTabs from "../components/ApplicationArchiveTabs";
 import ProfileAvatar from "../components/ProfileAvatar";
 import FilterDropdown from "../components/FilterDropdown";
+import {
+  isApplicationArchived,
+  type ApplicationArchiveSection,
+} from "../utils/applicationArchive";
 import { getApplicationStatusStyles } from "../utils/applicationStatusStyles";
 
 type ApplicationDocument = {
@@ -17,6 +22,8 @@ type ApplicationRow = {
   job_vacancy_id?: string | null;
   position_title: string | null;
   status: string;
+  archive_after?: string | null;
+  archived_at?: string | null;
   date_applied: string;
   applicant_name?: string | null;
   applicant_email?: string | null;
@@ -104,6 +111,8 @@ export default function ApplicationsModule({
   onRefresh,
 }: Props) {
   const [search, setSearch] = useState("");
+  const [applicationSection, setApplicationSection] =
+    useState<ApplicationArchiveSection>("active");
   const [statusFilter, setStatusFilter] = useState("All");
   const [jobPostFilter, setJobPostFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -125,22 +134,36 @@ export default function ApplicationsModule({
       }
     : null;
 
+  const activeCount = applications.filter(
+    (application) => !isApplicationArchived(application),
+  ).length;
+  const archivedCount = applications.length - activeCount;
+  const sectionApplications = useMemo(
+    () =>
+      applications.filter(
+        (application) =>
+          isApplicationArchived(application) ===
+          (applicationSection === "archived"),
+      ),
+    [applicationSection, applications],
+  );
+
   const jobPostOptions = useMemo(
     () =>
       [
         ...new Set(
-          applications.map(
+          sectionApplications.map(
             (application) =>
               application.position_title?.trim() || "Position not specified",
           ),
         ),
       ].sort((first, second) => first.localeCompare(second)),
-    [applications],
+    [sectionApplications],
   );
 
   const visibleApplications = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
-    return applications.filter((application) => {
+    return sectionApplications.filter((application) => {
       const appliedDay = application.date_applied?.slice(0, 10) || "";
       return (
         (statusFilter === "All" ||
@@ -162,7 +185,7 @@ export default function ApplicationsModule({
         (!dateTo || (appliedDay && appliedDay <= dateTo))
       );
     });
-  }, [applications, dateFrom, dateTo, jobPostFilter, search, statusFilter]);
+  }, [dateFrom, dateTo, jobPostFilter, search, sectionApplications, statusFilter]);
 
   const applicationGroups = useMemo(() => {
     const groups = new Map<string, ApplicationRow[]>();
@@ -306,6 +329,13 @@ export default function ApplicationsModule({
           ))}
         </div>
       </div>
+
+      <ApplicationArchiveTabs
+        value={applicationSection}
+        onChange={setApplicationSection}
+        activeCount={activeCount}
+        archivedCount={archivedCount}
+      />
 
       {actionError && (
         <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">

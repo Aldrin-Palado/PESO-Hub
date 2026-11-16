@@ -80,6 +80,8 @@ interface ApplicationRow {
   job_seeker_id: string;
   position_title: string | null;
   status: string;
+  archive_after?: string | null;
+  archived_at?: string | null;
   date_applied: string;
   applicant_name?: string | null;
   applicant_email?: string | null;
@@ -158,7 +160,7 @@ async function loadEmployerApplications(
   const { data: applicationRows, error: applicationError } = await supabase
     .from("application")
     .select(
-      "application_id, employer_id, job_seeker_id, position_title, status, date_applied, applicant_name, applicant_email, applicant_contact_no, applicant_address, applicant_resume_url, applicant_qualification_files",
+      "application_id, employer_id, job_seeker_id, position_title, status, archive_after, archived_at, date_applied, applicant_name, applicant_email, applicant_contact_no, applicant_address, applicant_resume_url, applicant_qualification_files",
     )
     .eq("employer_id", employerId)
     .order("date_applied", { ascending: false });

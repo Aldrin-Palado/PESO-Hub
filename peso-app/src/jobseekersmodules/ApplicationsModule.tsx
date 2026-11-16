@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../services/supabase";
 import { getResumeFileName, openStoredResume } from "../services/resumes";
+import ApplicationArchiveTabs from "../components/ApplicationArchiveTabs";
+import {
+  isApplicationArchived,
+  type ApplicationArchiveSection,
+} from "../utils/applicationArchive";
 import { getApplicationStatusStyles } from "../utils/applicationStatusStyles";
 
 type Seeker = {
@@ -34,13 +39,14 @@ type Application = {
   companyLogoUrl: string | null;
   date: string;
   status: string;
+  archive_after: string | null;
+  archived_at: string | null;
   applicantName: string | null;
   applicantEmail: string | null;
   contactNumber: string | null;
   address: string | null;
   resumeUrl: string | null;
   qualificationFiles: ApplicationDocument[];
-  archivedAt: string | null;
 };
 
 type Props = {
@@ -77,9 +83,8 @@ export default function ApplicationsModule({
   onNavigate,
 }: Props) {
   const [filter, setFilter] = useState("All");
-  const [applicationSection, setApplicationSection] = useState<
-    "active" | "archived"
-  >("active");
+  const [applicationSection, setApplicationSection] =
+    useState<ApplicationArchiveSection>("active");
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -91,8 +96,8 @@ export default function ApplicationsModule({
   useEffect(() => {
     let active = true;
 
-    const loadApplications = async () => {
-      setLoading(true);
+    const loadApplications = async (showLoading = true) => {
+      if (showLoading) setLoading(true);
       setLoadError("");
 
       const { data, error } = await supabase
@@ -101,14 +106,15 @@ export default function ApplicationsModule({
           application_id,
           position_title,
           status,
+          archive_after,
+          archived_at,
           date_applied,
           applicant_name,
           applicant_email,
           applicant_contact_no,
           applicant_address,
           applicant_resume_url,
-          applicant_qualification_files,
-          archived_at
+          applicant_qualification_files
         `)
         .eq("job_seeker_id", seeker.job_seeker_id)
         .order("date_applied", { ascending: false });
@@ -119,7 +125,7 @@ export default function ApplicationsModule({
         console.error("Error loading job seeker applications:", error);
         setLoadError(`Unable to load applications: ${error.message}`);
         setApplications([]);
-        setLoading(false);
+        if (showLoading) setLoading(false);
         return;
       }
 
@@ -137,7 +143,7 @@ export default function ApplicationsModule({
           `Unable to load employer profiles: ${employerProfilesError.message}`,
         );
         setApplications([]);
-        setLoading(false);
+        if (showLoading) setLoading(false);
         return;
       }
 
@@ -168,12 +174,13 @@ export default function ApplicationsModule({
               day: "numeric",
             }),
             status: row.status,
+            archive_after: row.archive_after,
+            archived_at: row.archived_at,
             applicantName: row.applicant_name,
             applicantEmail: row.applicant_email,
             contactNumber: row.applicant_contact_no,
             address: row.applicant_address,
             resumeUrl: row.applicant_resume_url,
-            archivedAt: row.archived_at,
             qualificationFiles: Array.isArray(row.applicant_qualification_files)
               ? row.applicant_qualification_files.filter(
                   (document): document is ApplicationDocument =>
@@ -188,11 +195,10 @@ export default function ApplicationsModule({
           };
         })
       );
-      setLoading(false);
+      if (showLoading) setLoading(false);
     };
 
     void loadApplications();
-
     const channel = supabase
       .channel(`job-seeker-applications-${seeker.job_seeker_id}`)
       .on(
@@ -203,7 +209,7 @@ export default function ApplicationsModule({
           table: "application",
           filter: `job_seeker_id=eq.${seeker.job_seeker_id}`,
         },
-        () => void loadApplications(),
+        () => void loadApplications(false),
       )
       .subscribe();
 
@@ -249,27 +255,22 @@ export default function ApplicationsModule({
     }
   };
 
-  const activeApplications = useMemo(
-    () => applications.filter((application) => !application.archivedAt),
-    [applications],
-  );
-  const archivedApplications = useMemo(
-    () => applications.filter((application) => Boolean(application.archivedAt)),
-    [applications],
-  );
-  const sectionApplications =
-    applicationSection === "archived"
-      ? archivedApplications
-      : activeApplications;
   const filtered = useMemo(
     () =>
-      sectionApplications.filter(
-        (application) =>
+      applications.filter((application) =>
+        isApplicationArchived(application) ===
+          (applicationSection === "archived") &&
+        (
           filter === "All" ||
           application.status.toLowerCase() === filter.toLowerCase()
+        )
       ),
-    [filter, sectionApplications]
+    [applications, applicationSection, filter]
   );
+  const activeCount = applications.filter(
+    (application) => !isApplicationArchived(application),
+  ).length;
+  const archivedCount = applications.length - activeCount;
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -291,56 +292,12 @@ export default function ApplicationsModule({
         )}
       </div>
 
-      <div
-        role="tablist"
-        aria-label="Application sections"
-        className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200 bg-white"
-      >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={applicationSection === "active"}
-          onClick={() => setApplicationSection("active")}
-          className={`flex min-h-12 items-center justify-center gap-2 px-4 py-3 text-sm font-semibold transition ${
-            applicationSection === "active"
-              ? "bg-blue-700 text-white"
-              : "text-slate-600 hover:bg-blue-50"
-          }`}
-        >
-          Active Applications
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs ${
-              applicationSection === "active"
-                ? "bg-white/20 text-white"
-                : "bg-slate-100 text-slate-600"
-            }`}
-          >
-            {activeApplications.length}
-          </span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={applicationSection === "archived"}
-          onClick={() => setApplicationSection("archived")}
-          className={`flex min-h-12 items-center justify-center gap-2 border-l border-slate-200 px-4 py-3 text-sm font-semibold transition ${
-            applicationSection === "archived"
-              ? "bg-blue-700 text-white"
-              : "text-slate-600 hover:bg-blue-50"
-          }`}
-        >
-          Archived Applications
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs ${
-              applicationSection === "archived"
-                ? "bg-white/20 text-white"
-                : "bg-slate-100 text-slate-600"
-            }`}
-          >
-            {archivedApplications.length}
-          </span>
-        </button>
-      </div>
+      <ApplicationArchiveTabs
+        value={applicationSection}
+        onChange={setApplicationSection}
+        activeCount={activeCount}
+        archivedCount={archivedCount}
+      />
 
       {/* Filter */}
       <div className="flex flex-wrap gap-2">
@@ -398,11 +355,7 @@ export default function ApplicationsModule({
             </h3>
 
             <p className="mt-1 text-sm text-gray-500">
-              {filtered.length === 0 && filter !== "All"
-                ? "There are no applications under the selected status."
-                : applicationSection === "active"
-                  ? "There are no active applications."
-                  : "There are no archived applications."}
+              There are no applications under the selected status.
             </p>
 
             <button

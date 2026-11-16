@@ -66,6 +66,8 @@ type StaffApplication = {
   employer_name: string | null;
   position_title: string | null;
   status: string;
+  archive_after?: string | null;
+  archived_at?: string | null;
   date_applied: string;
   updated_at?: string;
   created_at?: string;
@@ -1473,8 +1475,38 @@ function JobApplications() {
     };
 
     void loadApplications();
+    const channel = supabase
+      .channel("staff-application-archive")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "application",
+        },
+        (payload) => {
+          const updatedApplication =
+            payload.new as Partial<StaffApplication>;
+          if (!updatedApplication.application_id) return;
+
+          setApplications((current) =>
+            current.map((application) =>
+              application.application_id ===
+              updatedApplication.application_id
+                ? {
+                    ...application,
+                    archive_after: updatedApplication.archive_after,
+                    archived_at: updatedApplication.archived_at,
+                  }
+                : application,
+            ),
+          );
+        },
+      )
+      .subscribe();
     return () => {
       active = false;
+      void supabase.removeChannel(channel);
     };
   }, []);
 

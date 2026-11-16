@@ -2,8 +2,13 @@ import React, { useMemo, useState } from "react";
 import { openStoredResume } from "../services/resumes";
 import type { ApplicationDecisionResult } from "../services/applicationDecisions";
 import ApplicationScopeToggle from "../components/ApplicationScopeToggle";
+import ApplicationArchiveTabs from "../components/ApplicationArchiveTabs";
 import ModuleScoreboard from "../components/ModuleScoreboard";
 import FilterDropdown from "../components/FilterDropdown";
+import {
+  isApplicationArchived,
+  type ApplicationArchiveSection,
+} from "../utils/applicationArchive";
 import { getApplicationStatusStyles } from "../utils/applicationStatusStyles";
 
 type Application = {
@@ -15,6 +20,8 @@ type Application = {
   job_vacancy_id?: string | null;
   status?: string;
   application_status?: string;
+  archive_after?: string | null;
+  archived_at?: string | null;
   created_at?: string;
   updated_at?: string;
   date_applied?: string;
@@ -137,6 +144,8 @@ export default function ApplicationsModule({
   const [applicationScope, setApplicationScope] = useState<"peso" | "overall">(
     "peso",
   );
+  const [applicationSection, setApplicationSection] =
+    useState<ApplicationArchiveSection>("active");
   const [employerFilter, setEmployerFilter] = useState("all");
   const [jobFilter, setJobFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -160,9 +169,23 @@ export default function ApplicationsModule({
     [applicationScope, applications],
   );
 
+  const activeCount = scopedApplications.filter(
+    (application) => !isApplicationArchived(application),
+  ).length;
+  const archivedCount = scopedApplications.length - activeCount;
+  const sectionApplications = useMemo(
+    () =>
+      scopedApplications.filter(
+        (application) =>
+          isApplicationArchived(application) ===
+          (applicationSection === "archived"),
+      ),
+    [applicationSection, scopedApplications],
+  );
+
   const employers = useMemo(() => {
     const options = new Map<string, string>();
-    for (const application of scopedApplications) {
+    for (const application of sectionApplications) {
       if (application.employer_id) {
         options.set(
           application.employer_id,
@@ -173,21 +196,21 @@ export default function ApplicationsModule({
     return [...options.entries()].sort((first, second) =>
       first[1].localeCompare(second[1]),
     );
-  }, [scopedApplications]);
+  }, [sectionApplications]);
 
   const jobs = useMemo(
     () =>
       [...new Set(
-        scopedApplications
+        sectionApplications
           .map((application) => application.position_title?.trim())
           .filter((title): title is string => Boolean(title)),
       )].sort((first, second) => first.localeCompare(second)),
-    [scopedApplications],
+    [sectionApplications],
   );
 
   const visibleApplications = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
-    return scopedApplications.filter((application) => {
+    return sectionApplications.filter((application) => {
       const status = getApplicationStatus(application);
       const appliedDate = application.date_applied || application.created_at;
       const appliedDay = appliedDate ? appliedDate.slice(0, 10) : "";
@@ -214,7 +237,7 @@ export default function ApplicationsModule({
       );
     });
   }, [
-    scopedApplications,
+    sectionApplications,
     dateFrom,
     dateTo,
     employerFilter,
@@ -371,12 +394,18 @@ export default function ApplicationsModule({
         overallCount={applications.length}
         onChange={setApplicationScope}
       />
+      <ApplicationArchiveTabs
+        value={applicationSection}
+        onChange={setApplicationSection}
+        activeCount={activeCount}
+        archivedCount={archivedCount}
+      />
       <ModuleScoreboard
         title="Applications"
         metrics={[
           ...STATUSES.map((status) => ({
             label: status.label,
-            value: scopedApplications.filter(
+            value: sectionApplications.filter(
               (application) => getApplicationStatus(application) === status.value,
             ).length,
           })),
