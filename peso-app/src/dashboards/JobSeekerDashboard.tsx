@@ -80,6 +80,7 @@ type JobSeekerNotification = {
   sender_user_id: string;
   body: string;
   created_at: string;
+  read_at: string | null;
   sender_label: string;
 };
 
@@ -95,18 +96,41 @@ type MessageContactSummary = {
   role: string;
 };
 
-async function loadUnreadJobSeekerMessages(
+async function loadJobSeekerNotifications(
   userId: string,
 ): Promise<JobSeekerNotification[]> {
-  const { data: messages, error: messagesError } = await supabase
-    .from("peso_messages")
-    .select("message_id, sender_user_id, body, created_at")
-    .eq("recipient_user_id", userId)
-    .is("read_at", null)
-    .order("created_at", { ascending: false });
+  const [recentResult, unreadResult] = await Promise.all([
+    supabase
+      .from("peso_messages")
+      .select("message_id, sender_user_id, body, created_at, read_at")
+      .eq("recipient_user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(3),
+    supabase
+      .from("peso_messages")
+      .select("message_id, sender_user_id, body, created_at, read_at")
+      .eq("recipient_user_id", userId)
+      .is("read_at", null)
+      .order("created_at", { ascending: false }),
+  ]);
 
-  if (messagesError) throw messagesError;
-  if (!messages?.length) return [];
+  if (recentResult.error) throw recentResult.error;
+  if (unreadResult.error) throw unreadResult.error;
+
+  const unreadMessages = unreadResult.data ?? [];
+  const readRecentMessages = (recentResult.data ?? []).filter(
+    (message) => message.read_at !== null,
+  );
+  const messages = [
+    ...unreadMessages,
+    ...readRecentMessages.slice(0, Math.max(0, 3 - unreadMessages.length)),
+  ].sort(
+    (left, right) =>
+      new Date(right.created_at).getTime() -
+      new Date(left.created_at).getTime(),
+  );
+
+  if (!messages.length) return [];
 
   const { data: contacts, error: contactsError } = await supabase.rpc(
     "get_peso_message_contacts",
@@ -376,6 +400,9 @@ export default function JobSeekerDashboard() {
   const [seeker, setSeeker] = useState<Seeker | null>(null);
   const [hasProfilePhoto, setHasProfilePhoto] = useState<boolean | null>(null);
   const [notifications, setNotifications] = useState<JobSeekerNotification[]>([]);
+  const unreadNotificationCount = notifications.filter(
+    (notification) => notification.read_at === null,
+  ).length;
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationsError, setNotificationsError] = useState("");
@@ -467,9 +494,9 @@ export default function JobSeekerDashboard() {
     let active = true;
     const refreshNotifications = async () => {
       try {
-        const unreadMessages = await loadUnreadJobSeekerMessages(seeker.user_id);
+        const messages = await loadJobSeekerNotifications(seeker.user_id);
         if (active) {
-          setNotifications(unreadMessages);
+          setNotifications(messages);
           setNotificationsError("");
         }
       } catch (notificationError) {
@@ -518,7 +545,7 @@ export default function JobSeekerDashboard() {
     setNotificationsLoading(true);
     setNotificationsError("");
     try {
-      setNotifications(await loadUnreadJobSeekerMessages(seeker.user_id));
+      setNotifications(await loadJobSeekerNotifications(seeker.user_id));
     } catch (notificationError) {
       console.error("Could not load Job Seeker notifications:", notificationError);
       setNotificationsError("Notifications could not be loaded. Please try again.");
@@ -530,20 +557,28 @@ export default function JobSeekerDashboard() {
   const openNotificationConversation = async (
     notification: JobSeekerNotification,
   ) => {
-    const { error: readError } = await supabase
-      .from("peso_messages")
-      .update({ read_at: new Date().toISOString() })
-      .eq("message_id", notification.message_id);
+    if (notification.read_at === null) {
+      const readAt = new Date().toISOString();
+      const { error: readError } = await supabase
+        .from("peso_messages")
+        .update({ read_at: readAt })
+        .eq("message_id", notification.message_id);
 
-    if (readError) {
-      console.error("Could not mark notification as read:", readError);
-      setNotificationsError("The message could not be marked as read. Please try again.");
-      return;
+      if (readError) {
+        console.error("Could not mark notification as read:", readError);
+        setNotificationsError("The message could not be marked as read. Please try again.");
+        return;
+      }
+
+      setNotifications((current) =>
+        current.map((item) =>
+          item.message_id === notification.message_id
+            ? { ...item, read_at: readAt }
+            : item,
+        ),
+      );
     }
 
-    setNotifications((current) =>
-      current.filter((item) => item.message_id !== notification.message_id),
-    );
     setNotificationsOpen(false);
     setMessageContactToOpen(notification.sender_user_id);
     handlePageChange("Messages");
@@ -1026,9 +1061,6 @@ export default function JobSeekerDashboard() {
               <h2 id="peso-registration-title" className="mt-1 text-2xl font-black text-[#123B70]">
                 Job Seeker Registration Details
               </h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Complete your employment information for PESO screening and job applications.
-              </p>
             </div>
             <button
               type="button"
@@ -1128,7 +1160,6 @@ export default function JobSeekerDashboard() {
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-xl font-black text-[#123B70]">PESO Screening Details</h2>
               <p className="mt-1 text-sm text-slate-500">
                 Review and update the information used for your employment profile.
               </p>
@@ -1850,7 +1881,7 @@ export default function JobSeekerDashboard() {
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         onLogout={handleLogout}
-        hasUnreadMessages={notifications.length > 0}
+        hasUnreadMessages={unreadNotificationCount > 0}
       />
 
       {/* =================================================
@@ -1917,13 +1948,13 @@ export default function JobSeekerDashboard() {
                 type="button"
                 onClick={() => void openNotifications()}
                 className="relative flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100"
-                aria-label={`Notifications${notifications.length ? `, ${notifications.length} unread` : ""}`}
+                aria-label={`Notifications${unreadNotificationCount ? `, ${unreadNotificationCount} unread` : ""}`}
                 aria-haspopup="dialog"
                 aria-expanded={notificationsOpen}
               >
                 <AppIcon name="bell" className="h-5 w-5" />
 
-                {notifications.length > 0 && (
+                {unreadNotificationCount > 0 && (
                   <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500" />
                 )}
               </button>
@@ -2090,26 +2121,42 @@ export default function JobSeekerDashboard() {
                   You’re all caught up
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  You have no unread notifications.
+                  There are no recent messages.
                 </p>
               </div>
             ) : (
-              <ul className="max-h-[min(60vh,32rem)] divide-y divide-slate-100 overflow-y-auto">
+              <ul className="max-h-[min(24.25rem,60vh)] divide-y divide-slate-100 overflow-y-auto">
                 {notifications.map((notification) => (
-                  <li key={notification.message_id}>
+                  <li key={notification.message_id} className="h-24">
                     <button
                       type="button"
                       onClick={() =>
                         void openNotificationConversation(notification)
                       }
-                      className="flex w-full items-start gap-3 px-5 py-4 text-left transition hover:bg-blue-50"
+                      aria-label={`${notification.read_at === null ? "Unread" : "Read"} notification from ${notification.sender_label}`}
+                      className={`flex h-full w-full items-start gap-3 px-5 py-4 text-left transition hover:bg-blue-50 ${
+                        notification.read_at === null ? "bg-blue-50" : "bg-white"
+                      }`}
                     >
-                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-600" />
+                      <span
+                        aria-hidden="true"
+                        className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                          notification.read_at === null
+                            ? "bg-blue-600"
+                            : "bg-transparent"
+                        }`}
+                      />
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-semibold text-slate-800">
+                        <span
+                          className={`block truncate text-sm ${
+                            notification.read_at === null
+                              ? "font-bold text-slate-800"
+                              : "font-medium text-slate-600"
+                          }`}
+                        >
                           {notification.sender_label}
                         </span>
-                        <span className="mt-1 block whitespace-pre-wrap break-words text-xs text-slate-600">
+                        <span className="mt-1 line-clamp-2 block whitespace-pre-wrap break-words text-xs text-slate-600">
                           {notification.body}
                         </span>
                         <span className="mt-2 block text-[10px] text-slate-400">
