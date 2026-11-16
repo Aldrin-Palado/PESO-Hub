@@ -593,24 +593,33 @@ export default function EmployerRegistrationProfileModule({
           </p>
           <div className={`${labelClass} mt-4`}>
             Authorized Representative's Electronic Signature{required}
-            {form.authorized_representative_signature &&
+            {isEditing &&
+              form.authorized_representative_signature &&
               !form.authorized_representative_signature.startsWith("data:image/") && (
                 <span className="mt-2 block rounded-lg bg-slate-50 p-3 text-sm font-normal text-slate-600">
                   Previously saved signature: {form.authorized_representative_signature}
                 </span>
               )}
-            <ESignatureInput
-              value={form.authorized_representative_signature}
-              disabled={!isEditing || saving}
-              onChange={(signature) => {
-                setForm((current) => ({
-                  ...current,
-                  authorized_representative_signature: signature,
-                }));
-                setError("");
-                setSuccess("");
-              }}
-            />
+            {isEditing ? (
+              <ESignatureInput
+                value={form.authorized_representative_signature}
+                disabled={saving}
+                onChange={(signature) => {
+                  setForm((current) => ({
+                    ...current,
+                    authorized_representative_signature: signature,
+                  }));
+                  setError("");
+                  setSuccess("");
+                }}
+              />
+            ) : (
+              <p className="mt-2 text-sm font-normal text-slate-500">
+                {form.authorized_representative_signature.trim()
+                  ? "Hidden while not editing."
+                  : "Not provided."}
+              </p>
+            )}
           </div>
           <label className="mt-4 flex items-start gap-2.5 text-sm leading-6 text-slate-700">
             <input type="checkbox" checked={consentAccepted} onChange={(event) => setConsentAccepted(event.target.checked)} required className="mt-1 h-4 w-4 accent-[#0759AE]" />

@@ -60,16 +60,6 @@ function Login() {
     setAuthStep("captcha");
   };
 
-  // Return to login credentials.
-  const backToCredentials = () => {
-    if (loading || oauthLoading) return;
-
-    resetCaptcha();
-    setError("");
-    setAuthMethod("password");
-    setAuthStep("credentials");
-  };
-
   // Extract Supabase Edge Function error.
   const getErrorMessage = async (
     loginError: {
@@ -285,14 +275,48 @@ function Login() {
 
     if (authInProgressRef.current || loading || oauthLoading) return;
 
-    // First step: show CAPTCHA.
+    // Validate credentials before allowing the password flow to continue to CAPTCHA.
     if (authStep === "credentials") {
       if (!email.trim() || !password) {
         setError("Please enter your email and password.");
         return;
       }
 
-      showCaptcha("password");
+      authInProgressRef.current = true;
+      setLoading(true);
+      setError("");
+
+      try {
+        const { data, error: validationError } =
+          await supabase.functions.invoke<{ valid?: boolean }>("captcha-auth", {
+            body: {
+              mode: "validate",
+              email: email.trim(),
+              password,
+            },
+          });
+
+        if (validationError) {
+          throw new Error(await getErrorMessage(validationError));
+        }
+        if (!data?.valid) {
+          throw new Error("Unable to validate credentials. Please try again.");
+        }
+
+        setAuthMethod("password");
+        resetCaptcha();
+        setAuthStep("captcha");
+      } catch (validationError) {
+        console.error("Login credential validation error:", validationError);
+        setError(
+          validationError instanceof Error
+            ? validationError.message
+            : "Unable to validate your credentials. Please try again.",
+        );
+      } finally {
+        setLoading(false);
+        authInProgressRef.current = false;
+      }
       return;
     }
 
@@ -571,7 +595,7 @@ function Login() {
                     disabled={loading || oauthLoading}
                     className="w-full rounded-2xl bg-[#315FEA] px-5 py-4 text-base font-semibold text-white shadow-[0_12px_24px_-12px_rgba(49,95,234,0.75)] transition hover:bg-[#244FD4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA] disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Continue
+                    {loading ? "Checking credentials..." : "Continue"}
                   </button>
 
                   {/* Login error */}
@@ -690,15 +714,6 @@ function Login() {
                     </p>
                   )}
 
-                  {/* Back */}
-                  <button
-                    type="button"
-                    onClick={backToCredentials}
-                    disabled={loading || oauthLoading}
-                    className="w-full rounded-2xl border border-[#D5DEEB] bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Back
-                  </button>
                 </>
               )}
 

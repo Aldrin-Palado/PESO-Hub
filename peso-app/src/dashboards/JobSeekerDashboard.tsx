@@ -1395,12 +1395,10 @@ export default function JobSeekerDashboard() {
                             )}
                             {field.key === "signature" &&
                             typeof rawValue === "string" &&
-                            rawValue.startsWith("data:image/") ? (
-                              <img
-                                src={rawValue}
-                                alt="Saved e-signature"
-                                className="mt-2 max-h-32 max-w-full rounded-lg border border-slate-200 bg-white object-contain p-2"
-                              />
+                            rawValue.trim() ? (
+                              <p className="mt-2 text-sm font-medium text-slate-500">
+                                Hidden while not editing.
+                              </p>
                             ) : (
                               <p className="mt-2 break-words text-sm font-semibold text-slate-800">
                                 {displayValue}

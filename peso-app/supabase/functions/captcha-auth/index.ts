@@ -61,7 +61,6 @@ for (const origin of additionalOrigins) {
 // Allowed hostnames for Cloudflare Turnstile verification.
 const allowedHostnames = (
   Deno.env.get("TURNSTILE_ALLOWED_HOSTNAMES") ??
-  Deno.env.get("RECAPTCHA_ALLOWED_HOSTNAMES") ??
   ""
 )
   .split(",")
@@ -129,8 +128,7 @@ async function verifyCaptchaToken(
   token: string
 ): Promise<CaptchaResult> {
   const secret =
-    Deno.env.get("TURNSTILE_SECRET_KEY") ??
-    Deno.env.get("RECAPTCHA_SECRET_KEY");
+    Deno.env.get("TURNSTILE_SECRET_KEY");
 
   if (!secret) {
     console.error(
@@ -348,21 +346,31 @@ Deno.serve(async (request: Request) => {
   // VALIDATE AUTHENTICATION MODE
   // ------------------------------------------------
 
+  const mode = payload.mode;
   if (
-    (payload.mode !== "password" &&
-      payload.mode !== "verify") ||
-    typeof payload.captchaToken !== "string" ||
-    payload.captchaToken.length === 0 ||
-    payload.captchaToken.length > 4096
+    mode !== "password" &&
+    mode !== "verify" &&
+    mode !== "validate"
+  ) {
+    return respond(
+      { error: "Invalid authentication mode." },
+      400
+    );
+  }
+
+  const captchaToken =
+    typeof payload.captchaToken === "string"
+      ? payload.captchaToken
+      : "";
+  if (
+    mode !== "validate" &&
+    (captchaToken.length === 0 || captchaToken.length > 4096)
   ) {
     return respond(
       { error: "A valid CAPTCHA response is required." },
       400
     );
   }
-
-  const mode = payload.mode;
-  const captchaToken = payload.captchaToken;
 
   let email: string | null = null;
   let password: string | null = null;
@@ -371,7 +379,7 @@ Deno.serve(async (request: Request) => {
   // PASSWORD VALIDATION
   // ------------------------------------------------
 
-  if (mode === "password") {
+  if (mode !== "verify") {
     if (
       typeof payload.email !== "string" ||
       typeof payload.password !== "string" ||
@@ -405,20 +413,22 @@ Deno.serve(async (request: Request) => {
       `[CAPTCHA AUTH] Processing mode: ${mode}`
     );
 
-    // STEP 1: Verify CAPTCHA with Cloudflare.
-    const captchaResult =
-      await verifyCaptchaToken(captchaToken);
+    if (mode !== "validate") {
+      // Verify CAPTCHA before password authentication or OAuth.
+      const captchaResult =
+        await verifyCaptchaToken(captchaToken);
 
-    if (!captchaResult.valid) {
-      return respond(
-        { error: captchaResult.error },
-        400
+      if (!captchaResult.valid) {
+        return respond(
+          { error: captchaResult.error },
+          400
+        );
+      }
+
+      console.log(
+        "[CAPTCHA AUTH] Cloudflare verification successful."
       );
     }
-
-    console.log(
-      "[CAPTCHA AUTH] Cloudflare verification successful."
-    );
 
     // STEP 2: Google OAuth preliminary verification.
     if (mode === "verify") {
@@ -496,7 +506,7 @@ Deno.serve(async (request: Request) => {
       );
     }
 
-    // STEP 5: Validate returned session.
+    // Validate the session before accepting the credentials.
     if (
       !authResult.access_token ||
       !authResult.refresh_token
@@ -509,6 +519,34 @@ Deno.serve(async (request: Request) => {
         { error: "Unable to create a login session." },
         502
       );
+    }
+
+    if (mode === "validate") {
+      const logoutUrl =
+        `${supabaseUrl.replace(/\/+$/, "")}` +
+        "/auth/v1/logout?scope=local";
+      const logoutResponse = await fetch(logoutUrl, {
+        method: "POST",
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${authResult.access_token}`,
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (!logoutResponse.ok) {
+        console.error(
+          "[AUTH] Could not revoke the pre-validation session:",
+          logoutResponse.status,
+        );
+        return respond(
+          { error: "Unable to validate credentials safely. Please try again." },
+          502
+        );
+      }
+
+      console.log("[AUTH] Password credentials validated.");
+      return respond({ success: true, valid: true });
     }
 
     console.log(
