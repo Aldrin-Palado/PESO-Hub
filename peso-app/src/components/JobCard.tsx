@@ -104,6 +104,10 @@ function JobCard({ job, index, isAuthenticated }: JobCardProps) {
   return (
     <>
       <article
+        style={{
+          contentVisibility: "auto",
+          containIntrinsicSize: "auto 24rem",
+        }}
         className={`group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 before:absolute before:inset-y-0 before:left-0 before:z-10 before:w-1.5 before:content-[''] before:transition-colors motion-reduce:before:transition-none hover:-translate-y-1 hover:shadow-lg ${accent}`}
       >
         <div className="px-6 pb-5 pt-5 sm:px-7">

@@ -753,6 +753,10 @@ export default function JobsModule({
             return (
               <div
                 key={job.id}
+                style={{
+                  contentVisibility: "auto",
+                  containIntrinsicSize: "auto 24rem",
+                }}
                 className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:border-blue-200 hover:shadow-md"
               >
                 <div className="px-5 pb-5 pt-5 sm:px-7">

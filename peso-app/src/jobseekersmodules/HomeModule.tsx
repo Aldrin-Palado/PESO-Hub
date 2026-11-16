@@ -389,6 +389,10 @@ export default function HomeModule({
               return (
                 <article
                   key={post.id}
+                  style={{
+                    contentVisibility: "auto",
+                    containIntrinsicSize: "auto 36rem",
+                  }}
                   className="overflow-hidden rounded-2xl border border-gray-300 bg-white shadow-md ring-1 ring-gray-900/5 transition hover:shadow-lg"
                 >
                   {postMedia.length > 0 && (
@@ -519,6 +523,10 @@ export default function HomeModule({
             {announcements.map((announcement) => (
               <article
                 key={announcement.id}
+                style={{
+                  contentVisibility: "auto",
+                  containIntrinsicSize: "auto 12rem",
+                }}
                 className="rounded-xl border border-gray-200 p-4"
               >
                 <time

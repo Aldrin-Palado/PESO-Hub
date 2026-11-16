@@ -403,6 +403,10 @@ function Home() {
               {pesoPosts.map((post) => (
                   <article
                     key={post.id}
+                    style={{
+                      contentVisibility: "auto",
+                      containIntrinsicSize: "auto 36rem",
+                    }}
                     className="relative overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-md ring-1 ring-slate-900/5 transition before:absolute before:inset-y-0 before:left-0 before:z-10 before:w-1 before:bg-gradient-to-b before:from-yellow-400 before:to-red-500 before:content-[''] hover:shadow-lg"
                   >
                     {getPostMedia(post).length > 0 && (
@@ -533,6 +537,10 @@ function Home() {
               {announcements.map((announcement) => (
                 <article
                   key={announcement.id}
+                  style={{
+                    contentVisibility: "auto",
+                    containIntrinsicSize: "auto 12rem",
+                  }}
                   className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 pl-6 shadow-sm transition before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-gradient-to-b before:from-yellow-400 before:to-red-500 before:content-[''] hover:shadow-md"
                 >
                   <time className="text-xs text-slate-400" dateTime={announcement.created_at}>
