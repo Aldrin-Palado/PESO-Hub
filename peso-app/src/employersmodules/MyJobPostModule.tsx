@@ -19,6 +19,8 @@ type JobPost = {
   location: string;
   employment_type: string;
   job_classification: "local" | "international";
+  salary_min: number | null;
+  salary_max: number | null;
   vacancies_available: number;
   status: string;
   date_posted: string;
@@ -47,6 +49,9 @@ type JobForm = {
   location: string;
   employment_type: string;
   job_classification: "local" | "international";
+  salary_specified: boolean;
+  salary_min: string;
+  salary_max: string;
   vacancies_available: string;
   deadline: string;
 };
@@ -59,6 +64,9 @@ const emptyForm: JobForm = {
   location: "",
   employment_type: "Full-time",
   job_classification: "local",
+  salary_specified: false,
+  salary_min: "",
+  salary_max: "",
   vacancies_available: "1",
   deadline: "",
 };
@@ -141,6 +149,9 @@ export default function MyJobPostModule({
       location: job.location ?? "",
       employment_type: job.employment_type ?? "Full-time",
       job_classification: job.job_classification ?? "local",
+      salary_specified: job.salary_min != null || job.salary_max != null,
+      salary_min: job.salary_min == null ? "" : String(job.salary_min),
+      salary_max: job.salary_max == null ? "" : String(job.salary_max),
       vacancies_available: String(job.vacancies_available || 1),
       deadline: job.deadline ? job.deadline.slice(0, 10) : "",
     });
@@ -334,6 +345,34 @@ export default function MyJobPostModule({
       return;
     }
 
+    if (form.salary_specified) {
+      if (!form.salary_min.trim() || !form.salary_max.trim()) {
+        setMessage("Enter both the minimum and maximum salary.");
+        return;
+      }
+
+      const minimumSalary = Number(form.salary_min);
+      const maximumSalary = Number(form.salary_max);
+
+      if (
+        !Number.isFinite(minimumSalary) ||
+        !Number.isFinite(maximumSalary) ||
+        minimumSalary < 0 ||
+        maximumSalary < 0
+      ) {
+        setMessage("Enter valid non-negative salary amounts.");
+        return;
+      }
+
+      if (minimumSalary > maximumSalary) {
+        setMessage("Minimum salary cannot exceed maximum salary.");
+        return;
+      }
+    }
+
+    const salaryMin = form.salary_specified ? Number(form.salary_min) : null;
+    const salaryMax = form.salary_specified ? Number(form.salary_max) : null;
+
     setSaving(true);
     setMessage("");
 
@@ -358,8 +397,8 @@ export default function MyJobPostModule({
             location: form.location.trim(),
             employment_type: form.employment_type,
             job_classification: form.job_classification,
-            salary_min: null,
-            salary_max: null,
+            salary_min: salaryMin,
+            salary_max: salaryMax,
             vacancies_available: Math.max(
               1,
               Number(form.vacancies_available) || 1
@@ -390,8 +429,8 @@ export default function MyJobPostModule({
             location: form.location.trim(),
             employment_type: form.employment_type,
             job_classification: form.job_classification,
-            salary_min: null,
-            salary_max: null,
+            salary_min: salaryMin,
+            salary_max: salaryMax,
             vacancies_available: Math.max(
               1,
               Number(form.vacancies_available) || 1
@@ -545,6 +584,273 @@ export default function MyJobPostModule({
     });
   };
 
+  const renderJobForm = () => (
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+    >
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-black text-[#123B70]">
+          {editingId ? "Edit Job Posting" : "Create Job Posting"}
+        </h2>
+
+        <button
+          type="button"
+          onClick={() => {
+            setShowForm(false);
+            setEditingId(null);
+            resetImage();
+          }}
+          className="text-sm font-semibold text-slate-500"
+        >
+          Cancel
+        </button>
+      </div>
+
+      <div>
+        <label className="text-sm font-semibold text-slate-700">
+          Job Image
+        </label>
+
+        <p className="mt-1 text-xs text-slate-500">
+          Upload a JPEG, PNG, WebP, or GIF job image. Maximum size: 5 MB.
+        </p>
+
+        {imagePreview && (
+          <div className="mt-3">
+            <img
+              src={imagePreview}
+              alt="Job posting preview"
+              className="h-56 w-full rounded-xl border border-slate-200 bg-slate-50 object-contain sm:h-72"
+            />
+          </div>
+        )}
+
+        <div className="mt-3 flex flex-wrap gap-3">
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={handleImageChange}
+            className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:font-semibold file:text-[#0446A7] hover:file:bg-blue-100"
+          />
+
+          {imagePreview && (
+            <button
+              type="button"
+              onClick={handleRemoveImage}
+              className="rounded-lg border border-red-200 px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50"
+            >
+              Remove Image
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="text-sm font-semibold text-slate-700">
+          Job Title *
+          <input
+            required
+            value={form.position_title}
+            onChange={(event) =>
+              updateField("position_title", event.target.value)
+            }
+            placeholder="Enter job title"
+            className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
+          />
+        </label>
+
+        <label className="text-sm font-semibold text-slate-700">
+          Location *
+          <input
+            required
+            value={form.location}
+            onChange={(event) => updateField("location", event.target.value)}
+            placeholder="Enter job location"
+            className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
+          />
+        </label>
+
+        <label className="text-sm font-semibold text-slate-700">
+          Employment Type
+          <select
+            value={form.employment_type}
+            onChange={(event) =>
+              updateField("employment_type", event.target.value)
+            }
+            className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
+          >
+            <option value="Full-time">Full-time</option>
+            <option value="Part-time">Part-time</option>
+            <option value="Contract">Contract</option>
+            <option value="Temporary">Temporary</option>
+            <option value="Internship">Internship</option>
+          </select>
+        </label>
+
+        <label className="text-sm font-semibold text-slate-700">
+          Job Classification *
+          <select
+            required
+            value={form.job_classification}
+            onChange={(event) =>
+              updateField(
+                "job_classification",
+                event.target.value as JobForm["job_classification"]
+              )
+            }
+            className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
+          >
+            <option value="local">Local</option>
+            <option value="international">International</option>
+          </select>
+        </label>
+
+        <label className="text-sm font-semibold text-slate-700">
+          Available Vacancies *
+          <input
+            required
+            type="number"
+            min="1"
+            value={form.vacancies_available}
+            onChange={(event) =>
+              updateField("vacancies_available", event.target.value)
+            }
+            className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
+          />
+        </label>
+
+        <fieldset className="space-y-3 md:col-span-2">
+          <legend className="text-sm font-semibold text-slate-700">
+            Salary
+          </legend>
+          <div className="flex flex-wrap gap-4">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={form.salary_specified}
+                onChange={() =>
+                  setForm((previous) => ({
+                    ...previous,
+                    salary_specified: true,
+                  }))
+                }
+                className="h-4 w-4 rounded border-slate-300 text-[#0446A7] focus:ring-blue-500"
+              />
+              Specify salary
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={!form.salary_specified}
+                onChange={() =>
+                  setForm((previous) => ({
+                    ...previous,
+                    salary_specified: false,
+                    salary_min: "",
+                    salary_max: "",
+                  }))
+                }
+                className="h-4 w-4 rounded border-slate-300 text-[#0446A7] focus:ring-blue-500"
+              />
+              Salary not specified
+            </label>
+          </div>
+        </fieldset>
+
+        {form.salary_specified && (
+          <>
+            <label className="text-sm font-semibold text-slate-700">
+              Minimum Salary *
+              <input
+                required
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.salary_min}
+                onChange={(event) => updateField("salary_min", event.target.value)}
+                placeholder="Enter minimum salary"
+                className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
+              />
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              Maximum Salary *
+              <input
+                required
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.salary_max}
+                onChange={(event) => updateField("salary_max", event.target.value)}
+                placeholder="Enter maximum salary"
+                className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
+              />
+            </label>
+          </>
+        )}
+
+        <label className="text-sm font-semibold text-slate-700 md:col-span-2">
+          Job Description *
+          <AutoResizeTextarea
+            required
+            rows={4}
+            value={form.description}
+            onChange={(event) => updateField("description", event.target.value)}
+            placeholder="Describe the responsibilities of the job"
+            className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
+          />
+        </label>
+
+        <label className="text-sm font-semibold text-slate-700 md:col-span-2">
+          Job Qualifications
+          <AutoResizeTextarea
+            rows={4}
+            value={form.job_qualifications}
+            onChange={(event) =>
+              updateField("job_qualifications", event.target.value)
+            }
+            placeholder="Enter the education, skills, experience, or certifications required for this position"
+            className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
+          />
+        </label>
+
+        <label className="text-sm font-semibold text-slate-700 md:col-span-2">
+          Job Requirements
+          <AutoResizeTextarea
+            rows={4}
+            value={form.requirements}
+            onChange={(event) => updateField("requirements", event.target.value)}
+            placeholder="Enter application requirements, such as documents or other instructions"
+            className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
+          />
+        </label>
+
+        <label className="text-sm font-semibold text-slate-700">
+          Application Deadline
+          <input
+            type="date"
+            value={form.deadline}
+            onChange={(event) => updateField("deadline", event.target.value)}
+            className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
+          />
+        </label>
+      </div>
+
+      <button
+        type="submit"
+        disabled={saving}
+        className="rounded-xl bg-[#0446A7] px-6 py-3 text-sm font-bold text-white disabled:opacity-50"
+      >
+        {saving
+          ? "Saving..."
+          : editingId
+            ? "Save Changes"
+            : "Publish Job"}
+      </button>
+    </form>
+  );
+
   return (
     <div className="space-y-6">
 
@@ -577,248 +883,9 @@ export default function MyJobPostModule({
         </div>
       )}
 
-      {/* JOB POST FORM */}
+      {/* CREATE FORM */}
 
-      {showForm && (
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
-        >
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-black text-[#123B70]">
-              {editingId ? "Edit Job Posting" : "Create Job Posting"}
-            </h2>
-
-            <button
-              type="button"
-              onClick={() => {
-                setShowForm(false);
-                resetImage();
-              }}
-              className="text-sm font-semibold text-slate-500"
-            >
-              Cancel
-            </button>
-          </div>
-
-          {/* IMAGE UPLOAD */}
-
-          <div>
-            <label className="text-sm font-semibold text-slate-700">
-              Job Image
-            </label>
-
-            <p className="mt-1 text-xs text-slate-500">
-              Upload a JPEG, PNG, WebP, or GIF job image. Maximum size: 5 MB.
-            </p>
-
-            {imagePreview && (
-              <div className="mt-3">
-                <img
-                  src={imagePreview}
-                  alt="Job posting preview"
-                  className="h-56 w-full rounded-xl border border-slate-200 bg-slate-50 object-contain sm:h-72"
-                />
-              </div>
-            )}
-
-            <div className="mt-3 flex flex-wrap gap-3">
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                onChange={handleImageChange}
-                className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:font-semibold file:text-[#0446A7] hover:file:bg-blue-100"
-              />
-
-              {imagePreview && (
-                <button
-                  type="button"
-                  onClick={handleRemoveImage}
-                  className="rounded-lg border border-red-200 px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50"
-                >
-                  Remove Image
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* JOB DETAILS */}
-
-          <div className="grid gap-4 md:grid-cols-2">
-
-            {/* JOB TITLE */}
-
-            <label className="text-sm font-semibold text-slate-700">
-              Job Title *
-
-              <input
-                required
-                value={form.position_title}
-                onChange={(event) =>
-                  updateField("position_title", event.target.value)
-                }
-                placeholder="Enter job title"
-                className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
-              />
-            </label>
-
-            {/* LOCATION */}
-
-            <label className="text-sm font-semibold text-slate-700">
-              Location *
-
-              <input
-                required
-                value={form.location}
-                onChange={(event) =>
-                  updateField("location", event.target.value)
-                }
-                placeholder="Enter job location"
-                className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
-              />
-            </label>
-
-            {/* EMPLOYMENT TYPE */}
-
-            <label className="text-sm font-semibold text-slate-700">
-              Employment Type
-
-              <select
-                value={form.employment_type}
-                onChange={(event) =>
-                  updateField("employment_type", event.target.value)
-                }
-                className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
-              >
-                <option value="Full-time">Full-time</option>
-                <option value="Part-time">Part-time</option>
-                <option value="Contract">Contract</option>
-                <option value="Temporary">Temporary</option>
-                <option value="Internship">Internship</option>
-              </select>
-            </label>
-
-            <label className="text-sm font-semibold text-slate-700">
-              Job Classification *
-
-              <select
-                required
-                value={form.job_classification}
-                onChange={(event) =>
-                  updateField(
-                    "job_classification",
-                    event.target.value as JobForm["job_classification"]
-                  )
-                }
-                className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
-              >
-                <option value="local">Local</option>
-                <option value="international">International</option>
-              </select>
-            </label>
-
-            {/* VACANCIES */}
-
-            <label className="text-sm font-semibold text-slate-700">
-              Available Vacancies *
-
-              <input
-                required
-                type="number"
-                min="1"
-                value={form.vacancies_available}
-                onChange={(event) =>
-                  updateField(
-                    "vacancies_available",
-                    event.target.value
-                  )
-                }
-                className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
-              />
-            </label>
-
-            {/* DESCRIPTION */}
-
-            <label className="text-sm font-semibold text-slate-700 md:col-span-2">
-              Job Description *
-
-              <AutoResizeTextarea
-                required
-                rows={4}
-                value={form.description}
-                onChange={(event) =>
-                  updateField("description", event.target.value)
-                }
-                placeholder="Describe the responsibilities of the job"
-                className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
-              />
-            </label>
-
-            {/* JOB QUALIFICATIONS */}
-
-            <label className="text-sm font-semibold text-slate-700 md:col-span-2">
-              Job Qualifications
-
-              <AutoResizeTextarea
-                rows={4}
-                value={form.job_qualifications}
-                onChange={(event) =>
-                  updateField("job_qualifications", event.target.value)
-                }
-                placeholder="Enter the education, skills, experience, or certifications required for this position"
-                className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
-              />
-            </label>
-
-            {/* REQUIREMENTS */}
-
-            <label className="text-sm font-semibold text-slate-700 md:col-span-2">
-              Job Requirements
-
-              <AutoResizeTextarea
-                rows={4}
-                value={form.requirements}
-                onChange={(event) =>
-                  updateField("requirements", event.target.value)
-                }
-                placeholder="Enter application requirements, such as documents or other instructions"
-                className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
-              />
-            </label>
-
-            {/* DEADLINE */}
-
-            <label className="text-sm font-semibold text-slate-700">
-              Application Deadline
-
-              <input
-                type="date"
-                value={form.deadline}
-                onChange={(event) =>
-                  updateField("deadline", event.target.value)
-                }
-                className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
-              />
-            </label>
-
-          </div>
-
-          {/* SUBMIT */}
-
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-xl bg-[#0446A7] px-6 py-3 text-sm font-bold text-white disabled:opacity-50"
-          >
-            {saving
-              ? "Saving..."
-              : editingId
-                ? "Save Changes"
-                : "Publish Job"}
-          </button>
-        </form>
-      )}
+      {showForm && !editingId && renderJobForm()}
 
       {/* JOB POSTS */}
 
@@ -842,11 +909,16 @@ export default function MyJobPostModule({
         </div>
       ) : (
         <div className="grid gap-6">
-          {jobs.map((job) => (
-            <article
-              key={job.job_vacancy_id}
-              className="mx-auto w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
-            >
+          {jobs.map((job) =>
+            showForm && editingId === job.job_vacancy_id ? (
+              <div key={job.job_vacancy_id} className="mx-auto w-full max-w-3xl">
+                {renderJobForm()}
+              </div>
+            ) : (
+              <article
+                key={job.job_vacancy_id}
+                className="mx-auto w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
+              >
               <div className="flex items-start gap-3 px-5 pb-4 pt-5 sm:px-6">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#0759AE] text-sm font-black text-white">
                   {employerLogoUrl ? (
@@ -982,8 +1054,9 @@ export default function MyJobPostModule({
                   Delete Post
                 </button>
               </div>
-            </article>
-          ))}
+              </article>
+            )
+          )}
         </div>
       )}
     </div>

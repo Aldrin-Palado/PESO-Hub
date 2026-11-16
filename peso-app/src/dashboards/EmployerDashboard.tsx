@@ -85,6 +85,7 @@ interface ApplicationRow {
   applicant_email?: string | null;
   applicant_contact_no?: string | null;
   applicant_address?: string | null;
+  applicant_resume_url?: string | null;
   applicant_user_id?: string | null;
   applicant_qualification_files?: { name: string; path: string }[] | null;
 }
@@ -157,7 +158,7 @@ async function loadEmployerApplications(
   const { data: applicationRows, error: applicationError } = await supabase
     .from("application")
     .select(
-      "application_id, employer_id, job_seeker_id, position_title, status, date_applied, applicant_name, applicant_email, applicant_contact_no, applicant_address, applicant_qualification_files",
+      "application_id, employer_id, job_seeker_id, position_title, status, date_applied, applicant_name, applicant_email, applicant_contact_no, applicant_address, applicant_resume_url, applicant_qualification_files",
     )
     .eq("employer_id", employerId)
     .order("date_applied", { ascending: false });
@@ -965,6 +966,7 @@ export default function EmployerDashboard() {
                 contact_no: profile.contact_no,
                 industry: profile.industry,
                 website: profile.website,
+                is_verified: profile.is_verified,
               }}
               registrationDetails={profile.registration_details}
               verificationDocuments={profile.verification_documents}
