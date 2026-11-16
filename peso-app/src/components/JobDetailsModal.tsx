@@ -113,12 +113,18 @@ export default function JobDetailsModal({
         <div className="max-h-[92vh] overflow-y-auto">
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur sm:px-8">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-sky-50 text-lg font-black text-sky-700">
+              <div
+                className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl text-lg font-black text-sky-700 ${
+                  job.employerIsPeso ? "bg-white" : "bg-sky-50"
+                }`}
+              >
                 {job.companyLogoUrl ? (
                   <img
                     src={job.companyLogoUrl}
                     alt={`${job.company} logo`}
-                    className="h-full w-full object-cover"
+                    className={`h-full w-full ${
+                      job.employerIsPeso ? "object-contain" : "object-cover"
+                    }`}
                   />
                 ) : (
                   job.company.charAt(0).toUpperCase() || "E"

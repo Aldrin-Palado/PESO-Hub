@@ -7,5 +7,5 @@ export function getEmployerProfileLogo(
   logoUrl: string | null | undefined,
   isPeso: boolean | null | undefined,
 ): string | null {
-  return logoUrl || (isPeso ? pesoProfileLogo : null);
+  return isPeso ? pesoProfileLogo : logoUrl || null;
 }

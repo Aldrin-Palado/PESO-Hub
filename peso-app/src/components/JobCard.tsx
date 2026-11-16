@@ -113,25 +113,35 @@ function JobCard({ job, index, isAuthenticated }: JobCardProps) {
                 type="button"
                 onClick={() => setIsCompanyProfileOpen(true)}
                 aria-label={`View ${job.employer?.name || "employer"} company profile`}
-                className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#0759AE] text-sm font-black text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-black text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  job.employer?.isPeso ? "bg-white" : "bg-[#0759AE]"
+                }`}
               >
                 {job.employer?.logoUrl ? (
                   <img
                     src={job.employer.logoUrl}
                     alt=""
-                    className="h-full w-full object-cover"
+                    className={`h-full w-full ${
+                      job.employer.isPeso ? "object-contain" : "object-cover"
+                    }`}
                   />
                 ) : (
                   job.employer?.name?.charAt(0).toUpperCase() || "E"
                 )}
               </button>
             ) : (
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#0759AE] text-sm font-black text-white shadow-sm">
+              <div
+                className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-black text-white shadow-sm ${
+                  job.employer?.isPeso ? "bg-white" : "bg-[#0759AE]"
+                }`}
+              >
                 {job.employer?.logoUrl ? (
                   <img
                     src={job.employer.logoUrl}
                     alt={`${job.employer.name || "Company"} logo`}
-                    className="h-full w-full object-cover"
+                    className={`h-full w-full ${
+                      job.employer.isPeso ? "object-contain" : "object-cover"
+                    }`}
                   />
                 ) : (
                   job.employer?.name?.charAt(0).toUpperCase() || "E"
@@ -269,12 +279,18 @@ function JobCard({ job, index, isAuthenticated }: JobCardProps) {
                 </button>
               </div>
               <div className="relative px-6 pb-5 sm:px-8">
-                <div className="-mt-12 flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl border-4 border-white bg-blue-50 text-3xl font-black text-blue-700 shadow-lg">
+                <div
+                  className={`-mt-12 flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl border-4 border-white text-3xl font-black text-blue-700 shadow-lg ${
+                    job.employer?.isPeso ? "bg-white" : "bg-blue-50"
+                  }`}
+                >
                   {job.employer?.logoUrl ? (
                     <img
                       src={job.employer.logoUrl}
                       alt={`${job.employer.name || "Company"} logo`}
-                      className="h-full w-full object-cover"
+                      className={`h-full w-full ${
+                        job.employer.isPeso ? "object-contain" : "object-cover"
+                      }`}
                     />
                   ) : (
                     job.employer?.name?.charAt(0).toUpperCase() || "E"
@@ -304,15 +320,17 @@ function JobCard({ job, index, isAuthenticated }: JobCardProps) {
               </div>
             </div>
             <div className="space-y-6 border-t border-slate-100 p-6 sm:p-8">
-              <section>
-                <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                  {job.employer?.isPeso ? "About PESO" : "Company background"}
-                </h3>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                  {job.employer?.description ||
-                    "This company has not added a background description yet."}
-                </p>
-              </section>
+              {!job.employer?.isPeso && (
+                <section>
+                  <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                    Company background
+                  </h3>
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                    {job.employer?.description ||
+                      "This company has not added a background description yet."}
+                  </p>
+                </section>
+              )}
               <dl className="grid gap-4 sm:grid-cols-2">
                 {job.employer?.address && (
                   <div className="rounded-xl bg-slate-50 p-4">
