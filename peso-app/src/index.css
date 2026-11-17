@@ -119,6 +119,15 @@
    ========================================================================== */
 
 @layer components {
+  #google-sign-in-button [role="button"]::after {
+    border-right: 2px solid #dadce0;
+    border-radius: inherit;
+    content: "";
+    inset: 0;
+    pointer-events: none;
+    position: absolute;
+  }
+
   .whirl-page-background {
     background-color: #f8fafc;
     background-image:

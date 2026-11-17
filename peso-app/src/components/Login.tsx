@@ -123,11 +123,8 @@ function Login() {
         text: "continue_with",
         shape: "rectangular",
         width: Math.min(
-          398,
-          Math.max(
-            200,
-            Math.round(buttonContainer.getBoundingClientRect().width) - 2,
-          ),
+          400,
+          Math.max(200, Math.round(buttonContainer.getBoundingClientRect().width)),
         ),
       });
     };
@@ -715,10 +712,11 @@ function Login() {
                   </div>
 
                   {/* Google OAuth */}
-                  <div className="flex min-h-11 w-full items-center justify-center">
+                  <div className="flex min-h-11 w-full justify-center">
                     <div
                       ref={googleButtonRef}
-                      className="flex w-full max-w-[25rem] justify-center"
+                      id="google-sign-in-button"
+                      className="w-full max-w-[25rem]"
                     />
                   </div>
                   {googleButtonError && (
