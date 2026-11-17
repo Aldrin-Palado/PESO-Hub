@@ -41,6 +41,8 @@ declare global {
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? "";
 const googleIdentityScriptUrl = "https://accounts.google.com/gsi/client";
+const googleRegistrationRequiredMessage =
+  "No PESO account is registered with this Google email. Please create an account first, then sign in with Google.";
 
 function Login() {
   const navigate = useNavigate();
@@ -67,6 +69,8 @@ function Login() {
 
   const [error, setError] = useState("");
   const [googleButtonError, setGoogleButtonError] = useState("");
+  const [showGoogleRegistrationModal, setShowGoogleRegistrationModal] =
+    useState(false);
 
   const authInProgressRef = useRef(false);
   const lastSubmittedCaptchaTokenRef = useRef("");
@@ -190,6 +194,19 @@ function Login() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!showGoogleRegistrationModal) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowGoogleRegistrationModal(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showGoogleRegistrationModal]);
 
   // Extract Supabase Edge Function error.
   const getErrorMessage = async (
@@ -574,9 +591,7 @@ function Login() {
         throw new Error(await getErrorMessage(googleCheckError));
       }
       if (!googleCheck?.registered) {
-        throw new Error(
-          "No PESO account is registered with this Google email. Please create an account first, then sign in with Google.",
-        );
+        throw new Error(googleRegistrationRequiredMessage);
       }
 
       const { data, error: googleError } =
@@ -595,11 +610,15 @@ function Login() {
     } catch (err) {
       console.error("Google OAuth error:", err);
 
-      setError(
+      const message =
         err instanceof Error
           ? err.message
-          : "Unable to sign in with Google. Please try again."
-      );
+          : "Unable to sign in with Google. Please try again.";
+      if (message === googleRegistrationRequiredMessage) {
+        setShowGoogleRegistrationModal(true);
+      } else {
+        setError(message);
+      }
 
       await supabase.auth.signOut();
       googleIdTokenRef.current = "";
@@ -762,11 +781,11 @@ function Login() {
                   </div>
 
                   {/* Google OAuth */}
-                  <div className="flex min-h-11 w-full justify-center">
-                    <div
-                      ref={googleButtonRef}
-                      id="google-sign-in-button"
-                      className="w-full max-w-[25rem]"
+                  <div className="flex min-h-11 w-full min-w-0 justify-center overflow-visible">
+                  <div
+                     ref={googleButtonRef}
+                     id="google-sign-in-button"
+                     className="w-full min-w-0 max-w-[25rem] overflow-visible"
                     />
                   </div>
                   {googleButtonError && (
@@ -898,6 +917,69 @@ function Login() {
           </div>
         </section>
       </main>
+      {showGoogleRegistrationModal && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setShowGoogleRegistrationModal(false);
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="google-registration-title"
+            aria-describedby="google-registration-description"
+            className="relative my-auto w-full max-w-md rounded-3xl border border-slate-100 bg-white p-7 text-center shadow-2xl sm:p-9"
+          >
+            <button
+              type="button"
+              onClick={() => setShowGoogleRegistrationModal(false)}
+              aria-label="Close registration message"
+              className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-xl leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA]"
+            >
+              &times;
+            </button>
+
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#EEF3FF] text-[#315FEA]">
+              <AppIcon name="user" className="h-7 w-7" />
+            </div>
+            <h2
+              id="google-registration-title"
+              className="text-2xl font-bold tracking-tight text-[#102A4C]"
+            >
+              Create your PESO account first
+            </h2>
+            <p
+              id="google-registration-description"
+              className="mt-3 text-sm leading-6 text-slate-600"
+            >
+              We couldn&apos;t find a PESO account for this Google email.
+              Register first, then return here to sign in with Google.
+            </p>
+
+            <div className="mt-7 grid gap-3">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => navigate("/register")}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#315FEA] px-5 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#244FD4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA]"
+              >
+                Create an account
+                <AppIcon name="arrowRight" className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowGoogleRegistrationModal(false)}
+                className="w-full rounded-xl border border-[#D5DEEB] bg-white px-5 py-3.5 text-sm font-semibold text-[#3156A2] transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA]"
+              >
+                Back to sign in
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
