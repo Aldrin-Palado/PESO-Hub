@@ -120,12 +120,13 @@
 
 @layer components {
   #google-sign-in-button [role="button"]::after {
-    border-right: 2px solid #dadce0;
-    border-radius: inherit;
-    content: "";
-    inset: 0;
-    pointer-events: none;
-    position: absolute;
+    border-right: 2px solid #dadce0 !important;
+    border-radius: inherit !important;
+    content: "" !important;
+    inset: 0 !important;
+    pointer-events: none !important;
+    position: absolute !important;
+    z-index: 1 !important;
   }
 
   .whirl-page-background {
