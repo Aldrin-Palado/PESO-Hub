@@ -1,4 +1,6 @@
 
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
 type CaptchaVerification = {
   success: boolean;
   hostname?: string;
@@ -20,6 +22,14 @@ type AuthResponse = {
 type CaptchaResult =
   | { valid: true }
   | { valid: false; error: string };
+
+type GoogleTokenInfo = {
+  aud?: unknown;
+  email?: unknown;
+  email_verified?: unknown;
+  exp?: unknown;
+  iss?: unknown;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return (
@@ -350,6 +360,7 @@ Deno.serve(async (request: Request) => {
   if (
     mode !== "password" &&
     mode !== "verify" &&
+    mode !== "google" &&
     mode !== "validate"
   ) {
     return respond(
@@ -361,6 +372,14 @@ Deno.serve(async (request: Request) => {
   const captchaToken =
     typeof payload.captchaToken === "string"
       ? payload.captchaToken
+      : "";
+  const googleIdToken =
+    typeof payload.googleIdToken === "string"
+      ? payload.googleIdToken
+      : "";
+  const googleClientId =
+    typeof payload.googleClientId === "string"
+      ? payload.googleClientId
       : "";
   if (
     mode !== "validate" &&
@@ -375,11 +394,24 @@ Deno.serve(async (request: Request) => {
   let email: string | null = null;
   let password: string | null = null;
 
+  if (
+    mode === "google" &&
+    (googleIdToken.length === 0 ||
+      googleIdToken.length > 8192 ||
+      googleClientId.length === 0 ||
+      googleClientId.length > 512)
+  ) {
+    return respond(
+      { error: "A valid Google account token is required." },
+      400
+    );
+  }
+
   // ------------------------------------------------
   // PASSWORD VALIDATION
   // ------------------------------------------------
 
-  if (mode !== "verify") {
+  if (mode === "password" || mode === "validate") {
     if (
       typeof payload.email !== "string" ||
       typeof payload.password !== "string" ||
@@ -437,6 +469,98 @@ Deno.serve(async (request: Request) => {
         verified: true,
         message: "CAPTCHA verification successful.",
       });
+    }
+
+    if (mode === "google") {
+      const googleTokenResponse = await fetch(
+        `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(googleIdToken)}`,
+        { signal: AbortSignal.timeout(10000) }
+      );
+      if (!googleTokenResponse.ok) {
+        return respond(
+          { error: "Google could not verify this account. Please try again." },
+          401
+        );
+      }
+
+      const tokenInfo = (await googleTokenResponse.json()) as GoogleTokenInfo;
+      const emailVerified =
+        tokenInfo.email_verified === true ||
+        tokenInfo.email_verified === "true";
+      const tokenExpiry = Number(tokenInfo.exp);
+      if (
+        tokenInfo.aud !== googleClientId ||
+        (tokenInfo.iss !== "accounts.google.com" &&
+          tokenInfo.iss !== "https://accounts.google.com") ||
+        !emailVerified ||
+        typeof tokenInfo.email !== "string" ||
+        !Number.isFinite(tokenExpiry) ||
+        tokenExpiry * 1000 <= Date.now()
+      ) {
+        return respond(
+          { error: "Google could not verify this account. Please try again." },
+          401
+        );
+      }
+
+      const serviceRoleKey =
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
+        Deno.env.get("SUPABASE_SECRET_KEY");
+      if (!serviceRoleKey) {
+        console.error("[AUTH] SUPABASE_SERVICE_ROLE_KEY is missing.");
+        return respond(
+          { error: "Google sign-in is not configured." },
+          500
+        );
+      }
+
+      const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const normalizedEmail = tokenInfo.email.trim().toLowerCase();
+      const exactEmailPattern = normalizedEmail.replace(/[\\%_]/g, "\\$&");
+      const profileChecks = await Promise.all([
+        adminClient
+          .from("job_seeker")
+          .select("user_id")
+          .ilike("email", exactEmailPattern)
+          .limit(1),
+        adminClient
+          .from("employer")
+          .select("user_id")
+          .ilike("email", exactEmailPattern)
+          .limit(1),
+        adminClient
+          .from("peso_admin")
+          .select("user_id")
+          .ilike("email", exactEmailPattern)
+          .limit(1),
+        adminClient
+          .from("peso_staff")
+          .select("user_id")
+          .ilike("email", exactEmailPattern)
+          .limit(1),
+      ]);
+      const profileError = profileChecks.find((result) => result.error)?.error;
+      if (profileError) {
+        console.error("[AUTH] Google profile lookup failed:", profileError);
+        return respond(
+          { error: "Unable to verify your PESO account. Please try again." },
+          500
+        );
+      }
+
+      if (!profileChecks.some((result) => result.data?.length)) {
+        return respond(
+          {
+            error:
+              "No PESO account is registered with this Google email. Please create an account first, then sign in with Google.",
+          },
+          403
+        );
+      }
+
+      return respond({ success: true, registered: true });
     }
 
     // STEP 3: Password authentication.

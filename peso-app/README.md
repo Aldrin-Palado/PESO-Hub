@@ -32,9 +32,12 @@ supabase functions deploy captcha-auth
 ```
 
 The function verifies tokens with Cloudflare before requesting a Supabase password
-session. Cloudflare Turnstile is not a native Supabase Auth CAPTCHA provider, so
-direct calls to Supabase's public password-grant endpoint do not pass through this
-function.
+session. Before Google sign-in, it also validates the Google ID token and checks for
+an existing PESO profile with that email; unregistered visitors are directed to
+registration without creating a Supabase Auth user. Configure the `SUPABASE_SERVICE_ROLE_KEY`
+secret for this profile lookup. Cloudflare Turnstile is not a native Supabase Auth
+CAPTCHA provider, so direct calls to Supabase's public password-grant endpoint do not
+pass through this function.
 
 ## Admin/staff audit logs
 

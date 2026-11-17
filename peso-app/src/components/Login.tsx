@@ -507,18 +507,26 @@ function Login() {
     setOauthLoading(true);
 
     try {
-      const { error: captchaError } = await supabase.functions.invoke(
-        "captcha-auth",
-        {
-          body: {
-            mode: "verify",
-            captchaToken: submittedToken,
+      const { data: googleCheck, error: googleCheckError } =
+        await supabase.functions.invoke<{ registered?: boolean }>(
+          "captcha-auth",
+          {
+            body: {
+              mode: "google",
+              captchaToken: submittedToken,
+              googleIdToken,
+              googleClientId,
+            },
           },
-        }
-      );
+        );
 
-      if (captchaError) {
-        throw new Error(await getErrorMessage(captchaError));
+      if (googleCheckError) {
+        throw new Error(await getErrorMessage(googleCheckError));
+      }
+      if (!googleCheck?.registered) {
+        throw new Error(
+          "No PESO account is registered with this Google email. Please create an account first, then sign in with Google.",
+        );
       }
 
       const { data, error: googleError } =
@@ -544,6 +552,9 @@ function Login() {
       );
 
       await supabase.auth.signOut();
+      googleIdTokenRef.current = "";
+      setAuthStep("credentials");
+      setAuthMethod("password");
       resetCaptcha();
       setOauthLoading(false);
       authInProgressRef.current = false;
@@ -701,10 +712,10 @@ function Login() {
                   </div>
 
                   {/* Google OAuth */}
-                  <div className="flex min-h-11 w-full justify-center">
+                  <div className="flex min-h-11 w-full items-center justify-center">
                     <div
                       ref={googleButtonRef}
-                      className="w-full max-w-[25rem]"
+                      className="w-full max-w-[25rem] rounded-[4px] ring-1 ring-inset ring-[#DADCE0]"
                     />
                   </div>
                   {googleButtonError && (
