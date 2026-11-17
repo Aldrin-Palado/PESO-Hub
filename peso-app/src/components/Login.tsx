@@ -83,6 +83,7 @@ function Login() {
   useEffect(() => {
     const buttonContainer = googleButtonRef.current;
     if (!buttonContainer) return;
+
     if (!googleClientId) {
       setGoogleButtonError(
         "Google sign-in is not configured. Set VITE_GOOGLE_CLIENT_ID and rebuild the app.",
@@ -91,19 +92,50 @@ function Login() {
     }
 
     let active = true;
-    const script = document.createElement("script");
-    script.src = googleIdentityScriptUrl;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      if (!active || !window.google || !googleButtonRef.current) return;
+    let resizeObserver: ResizeObserver | null = null;
+    let script = document.querySelector<HTMLScriptElement>(
+      `script[src="${googleIdentityScriptUrl}"]`,
+    );
+
+    const renderGoogleButton = () => {
+      if (!active || !window.google || !googleButtonRef.current) {
+        return;
+      }
+
+      const container = googleButtonRef.current;
+      const availableWidth = Math.floor(
+        container.getBoundingClientRect().width,
+      );
+
+      if (availableWidth < 200) return;
+
+      const buttonWidth = Math.min(400, availableWidth);
+
+      container.innerHTML = "";
+
+      window.google.accounts.id.renderButton(container, {
+        type: "standard",
+        theme: "outline",
+        size: "large",
+        text: "continue_with",
+        shape: "rectangular",
+        width: buttonWidth,
+      });
+    };
+
+    const initializeGoogle = () => {
+      if (!active || !window.google || !googleButtonRef.current) {
+        return;
+      }
 
       window.google.accounts.id.initialize({
         client_id: googleClientId,
         auto_select: false,
         callback: (response) => {
           if (!response.credential) {
-            setGoogleButtonError("Google did not return an account token. Please try again.");
+            setGoogleButtonError(
+              "Google did not return an account token. Please try again.",
+            );
             return;
           }
 
@@ -116,28 +148,46 @@ function Login() {
           setAuthStep("captcha");
         },
       });
-      window.google.accounts.id.renderButton(buttonContainer, {
-        type: "standard",
-        theme: "outline",
-        size: "large",
-        text: "continue_with",
-        shape: "rectangular",
-        width: Math.min(
-          400,
-          Math.max(200, Math.round(buttonContainer.getBoundingClientRect().width)),
-        ),
+
+      renderGoogleButton();
+
+      resizeObserver = new ResizeObserver(() => {
+        renderGoogleButton();
       });
+      resizeObserver.observe(buttonContainer);
     };
-    script.onerror = () => {
+
+    const handleScriptError = () => {
       if (active) {
-        setGoogleButtonError("Google sign-in could not be loaded. Please try again.");
+        setGoogleButtonError(
+          "Google sign-in could not be loaded. Please try again.",
+        );
       }
     };
-    document.head.appendChild(script);
+
+    if (window.google) {
+      initializeGoogle();
+    } else if (script) {
+      script.addEventListener("load", initializeGoogle);
+      script.addEventListener("error", handleScriptError);
+    } else {
+      script = document.createElement("script");
+      script.src = googleIdentityScriptUrl;
+      script.async = true;
+      script.defer = true;
+      script.onload = initializeGoogle;
+      script.onerror = handleScriptError;
+
+      document.head.appendChild(script);
+    }
 
     return () => {
       active = false;
-      script.remove();
+      resizeObserver?.disconnect();
+      if (script) {
+        script.removeEventListener("load", initializeGoogle);
+        script.removeEventListener("error", handleScriptError);
+      }
     };
   }, []);
 
