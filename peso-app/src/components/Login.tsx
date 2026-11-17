@@ -123,8 +123,11 @@ function Login() {
         text: "continue_with",
         shape: "rectangular",
         width: Math.min(
-          400,
-          Math.max(200, Math.round(buttonContainer.getBoundingClientRect().width)),
+          398,
+          Math.max(
+            200,
+            Math.round(buttonContainer.getBoundingClientRect().width) - 2,
+          ),
         ),
       });
     };
@@ -715,7 +718,7 @@ function Login() {
                   <div className="flex min-h-11 w-full items-center justify-center">
                     <div
                       ref={googleButtonRef}
-                      className="w-full max-w-[25rem] rounded-[4px] ring-1 ring-inset ring-[#DADCE0]"
+                      className="flex w-full max-w-[25rem] justify-center"
                     />
                   </div>
                   {googleButtonError && (
