@@ -1096,12 +1096,18 @@ export default function MyJobPostModule({
                 className="mx-auto w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
               >
               <div className="flex items-start gap-3 px-5 pb-4 pt-5 sm:px-6">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#0759AE] text-sm font-black text-white">
+                <div
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-black ${
+                    employerLogoUrl
+                      ? "bg-white ring-1 ring-slate-200"
+                      : "bg-[#0759AE] text-white"
+                  }`}
+                >
                   {employerLogoUrl ? (
                     <img
                       src={employerLogoUrl}
                       alt={`${employerName || "Company"} logo`}
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-contain p-1"
                     />
                   ) : (
                     employerName.trim().charAt(0).toUpperCase() || "E"
