@@ -1226,7 +1226,9 @@ export default function AdminDashboard() {
           employer_logo_url:
             employersById.get(job.employer_id)?.logo_url || null,
           employer_user_id:
-            employersById.get(job.employer_id)?.user_id || null,
+            employersById.get(job.employer_id)?.user_id ||
+            job.posted_by_user_id ||
+            null,
         })),
       );
     } catch (error) {
