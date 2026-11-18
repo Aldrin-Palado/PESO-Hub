@@ -824,13 +824,9 @@ export default function JobsModule({
                         ) : null}
                       </p>
                     </div>
-                    <div className="w-full pl-14 text-left sm:w-auto sm:pl-0 sm:text-right">
+                    <div className="w-full text-center sm:w-40">
                       <p className="text-[11px] font-medium text-slate-400">
                         {postedDate}
-                      </p>
-                      <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 sm:justify-end">
-                        <AppIcon name="mapPin" className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-                        {job.location}
                       </p>
                     </div>
                   </div>
@@ -842,6 +838,10 @@ export default function JobsModule({
                     <span aria-hidden="true">·</span>
                     <span>{job.type}</span>
                   </div>
+                  <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+                    <AppIcon name="mapPin" className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                    {job.location}
+                  </p>
                   <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs font-medium text-slate-600">
                     <span className="inline-flex items-center gap-1.5">
                       <AppIcon name="dollar" className="h-3.5 w-3.5 text-amber-500" />
