@@ -1222,15 +1222,17 @@ export default function JobsModule({
             </div>
 
             <div className="space-y-6 border-t border-slate-100 p-6 sm:p-8">
-              <section>
-                <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                  {companyModalJob.isPeso ? "About PESO" : "Company background"}
-                </h3>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                  {companyModalJob.companyDescription ||
-                    "This company has not added a background description yet."}
-                </p>
-              </section>
+              {!companyModalJob.isPeso && (
+                <section>
+                  <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                    Company background
+                  </h3>
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                    {companyModalJob.companyDescription ||
+                      "This company has not added a background description yet."}
+                  </p>
+                </section>
+              )}
 
               <dl className="grid gap-4 sm:grid-cols-2">
                 {companyModalJob.companyAddress && (
