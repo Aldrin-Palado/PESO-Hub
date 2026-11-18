@@ -81,6 +81,55 @@ export default function PESOJobPostsModule() {
     void loadJobs();
   }, [loadJobs]);
 
+  useEffect(() => {
+    if (!employerId) return;
+
+    let fallbackPoll: ReturnType<typeof setInterval> | null = null;
+    const channel = supabase
+      .channel(`peso-job-posts-${employerId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "job_vacancy",
+        },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            void loadJobs();
+            return;
+          }
+
+          if (payload.new.employer_id === employerId) {
+            void loadJobs();
+          }
+        },
+      )
+      .subscribe((status, subscriptionError) => {
+        if (status === "SUBSCRIBED") {
+          if (fallbackPoll) {
+            clearInterval(fallbackPoll);
+            fallbackPoll = null;
+          }
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.error("PESO job-post realtime subscription failed:", {
+            status,
+            error: subscriptionError,
+          });
+          if (!fallbackPoll) {
+            fallbackPoll = setInterval(() => {
+              void loadJobs();
+            }, 5000);
+          }
+        }
+      });
+
+    return () => {
+      if (fallbackPoll) clearInterval(fallbackPoll);
+      void supabase.removeChannel(channel);
+    };
+  }, [employerId, loadJobs]);
+
   if (!employerId && loading) {
     return (
       <p role="status" className="rounded-xl bg-white p-6 text-sm text-slate-600">
