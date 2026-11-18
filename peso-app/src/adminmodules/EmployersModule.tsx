@@ -26,6 +26,7 @@ type Employer = {
   phone?: string;
   address?: string;
   logo_url?: string | null;
+  is_peso?: boolean;
   is_active?: boolean;
   is_verified?: boolean;
   verification_status?: EmployerVerificationStatus;
@@ -152,6 +153,7 @@ const employerDetailSections: {
 ];
 
 function getVerificationStatus(employer: Employer): EmployerVerificationStatus {
+  if (employer.is_peso) return "verified";
   if (employer.verification_status) return employer.verification_status;
   return employer.is_verified ? "verified" : "pending";
 }
@@ -325,7 +327,8 @@ export default function EmployersModule({
       employer.verification_documents,
       employer,
     );
-    const isComplete = checklist.every((item) => item.complete);
+    const isComplete =
+      employer.is_peso || checklist.every((item) => item.complete);
     const completionMatches =
       completionFilter === "all" ||
       (completionFilter === "ready" && isComplete) ||
@@ -760,42 +763,48 @@ export default function EmployersModule({
                             {isActive ? "Active" : "Deactivated"}
                           </span>
                         </div>
-                        <label className="mt-3 block text-xs font-semibold text-slate-600">
-                          Verification status
-                          <select
-                            aria-label={`Verification status for ${name}`}
-                            value={status}
-                            onChange={(event) => {
-                              const nextStatus = event.target.value;
-                              if (isEmployerVerificationStatus(nextStatus)) {
-                                void updateVerificationStatus(employer, nextStatus);
-                              }
-                            }}
-                            disabled={
-                              !employer.employer_id ||
-                              updatingStatusId === employer.employer_id
-                            }
-                            className={`max-w-full rounded-full border-0 px-2.5 py-1.5 text-[11px] font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 ${
-                              status === "verified"
-                                ? "bg-emerald-50 text-emerald-700"
-                                : status === "not_approved"
-                                  ? "bg-red-50 text-red-700"
-                                  : "bg-amber-50 text-amber-800"
-                            }`}
-                          >
-                            <option value="pending">Pending</option>
-                            <option
-                              value="verified"
+                        {employer.is_peso ? (
+                          <span className="mt-3 inline-flex rounded-full bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700">
+                            Always verified
+                          </span>
+                        ) : (
+                          <label className="mt-3 block text-xs font-semibold text-slate-600">
+                            Verification status
+                            <select
+                              aria-label={`Verification status for ${name}`}
+                              value={status}
+                              onChange={(event) => {
+                                const nextStatus = event.target.value;
+                                if (isEmployerVerificationStatus(nextStatus)) {
+                                  void updateVerificationStatus(employer, nextStatus);
+                                }
+                              }}
                               disabled={
-                                status !== "verified" &&
-                                !checklist.every((item) => item.complete)
+                                !employer.employer_id ||
+                                updatingStatusId === employer.employer_id
                               }
+                              className={`max-w-full rounded-full border-0 px-2.5 py-1.5 text-[11px] font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 ${
+                                status === "verified"
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : status === "not_approved"
+                                    ? "bg-red-50 text-red-700"
+                                    : "bg-amber-50 text-amber-800"
+                              }`}
                             >
-                              Verified
-                            </option>
-                            <option value="not_approved">Not approved</option>
-                          </select>
-                        </label>
+                              <option value="pending">Pending</option>
+                              <option
+                                value="verified"
+                                disabled={
+                                  status !== "verified" &&
+                                  !checklist.every((item) => item.complete)
+                                }
+                              >
+                                Verified
+                              </option>
+                              <option value="not_approved">Not approved</option>
+                            </select>
+                          </label>
+                        )}
                         <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
                           <p className="flex min-w-0 items-center gap-2">
                             <AppIcon name="mail" className="h-3.5 w-3.5 shrink-0 text-slate-400" />
@@ -923,39 +932,45 @@ export default function EmployersModule({
                           </span>
                         </td>
                         <td className="px-2 py-2">
-                          <select
-                            aria-label={`Verification status for ${name}`}
-                            value={status}
-                            onChange={(event) => {
-                              const nextStatus = event.target.value;
-                              if (isEmployerVerificationStatus(nextStatus)) {
-                                void updateVerificationStatus(employer, nextStatus);
-                              }
-                            }}
-                            disabled={
-                              !employer.employer_id ||
-                              updatingStatusId === employer.employer_id
-                            }
-                            className={`w-full max-w-full rounded-lg border border-slate-200 px-2 py-2 text-[10px] font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 ${
-                              status === "verified"
-                                ? "bg-emerald-100 text-emerald-800"
-                                : status === "not_approved"
-                                  ? "bg-red-100 text-red-800"
-                                  : "bg-amber-100 text-amber-800"
-                            }`}
-                          >
-                            <option value="pending">Pending</option>
-                            <option
-                              value="verified"
+                          {employer.is_peso ? (
+                            <span className="inline-flex whitespace-nowrap rounded-lg bg-emerald-100 px-2 py-2 text-[10px] font-semibold text-emerald-800">
+                              Always verified
+                            </span>
+                          ) : (
+                            <select
+                              aria-label={`Verification status for ${name}`}
+                              value={status}
+                              onChange={(event) => {
+                                const nextStatus = event.target.value;
+                                if (isEmployerVerificationStatus(nextStatus)) {
+                                  void updateVerificationStatus(employer, nextStatus);
+                                }
+                              }}
                               disabled={
-                                status !== "verified" &&
-                                !checklist.every((item) => item.complete)
+                                !employer.employer_id ||
+                                updatingStatusId === employer.employer_id
                               }
+                              className={`w-full max-w-full rounded-lg border border-slate-200 px-2 py-2 text-[10px] font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 ${
+                                status === "verified"
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : status === "not_approved"
+                                    ? "bg-red-100 text-red-800"
+                                    : "bg-amber-100 text-amber-800"
+                              }`}
                             >
-                              Verified
-                            </option>
-                            <option value="not_approved">Not approved</option>
-                          </select>
+                              <option value="pending">Pending</option>
+                              <option
+                                value="verified"
+                                disabled={
+                                  status !== "verified" &&
+                                  !checklist.every((item) => item.complete)
+                                }
+                              >
+                                Verified
+                              </option>
+                              <option value="not_approved">Not approved</option>
+                            </select>
+                          )}
                         </td>
                         <td className="px-3 py-3">
                           {renderActions(employer)}
