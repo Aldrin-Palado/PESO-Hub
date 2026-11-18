@@ -1,5 +1,11 @@
 
-import { useRef, useState } from "react";
+import {
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+  type TextareaHTMLAttributes,
+} from "react";
 import AutoResizeTextarea from "../components/AutoResizeTextarea";
 import { supabase } from "../services/supabase";
 import { getEmployerRegistrationChecklist } from "../services/employerRegistration";
@@ -74,6 +80,98 @@ const emptyForm: JobForm = {
   deadline: "",
 };
 
+type BulletListTextareaProps = Omit<
+  TextareaHTMLAttributes<HTMLTextAreaElement>,
+  "value" | "onChange"
+> & {
+  value: string;
+  onChange: (value: string) => void;
+};
+
+function formatBulletList(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((line) => {
+      if (/^\s*(?:•|-|\*)\s*$/.test(line)) return "• ";
+      const content = line.replace(/^\s*(?:•|-|\*)\s*/, "").trim();
+      return content ? `• ${content}` : "";
+    })
+    .join("\n");
+}
+
+function getSavedBulletList(value: string) {
+  const formatted = formatBulletList(value)
+    .split("\n")
+    .filter((line) => line.trim() && line.trim() !== "•")
+    .join("\n");
+  return formatted || null;
+}
+
+function BulletListTextarea({
+  value,
+  onChange,
+  ...props
+}: BulletListTextareaProps) {
+  const handleChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    const textarea = event.currentTarget;
+    const rawValue = textarea.value;
+    const caret = textarea.selectionStart;
+    const addedPrefixes = rawValue
+      .slice(0, caret)
+      .split(/\r?\n/)
+      .filter(
+        (line) =>
+          line.trim() &&
+          !/^\s*(?:•|-|\*)\s+/.test(line),
+      ).length;
+    const formattedValue = formatBulletList(rawValue);
+
+    onChange(formattedValue);
+    if (formattedValue !== rawValue) {
+      requestAnimationFrame(() => {
+        const nextCaret = Math.min(
+          formattedValue.length,
+          caret + addedPrefixes * 2,
+        );
+        textarea.setSelectionRange(nextCaret, nextCaret);
+      });
+    }
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+
+    const textarea = event.currentTarget;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const nextValue = formatBulletList(
+      `${value.slice(0, start)}\n• ${value.slice(end)}`,
+    );
+    onChange(nextValue);
+
+    requestAnimationFrame(() => {
+      const nextCaret = Math.min(nextValue.length, start + 3);
+      textarea.setSelectionRange(nextCaret, nextCaret);
+    });
+  };
+
+  return (
+    <AutoResizeTextarea
+      {...props}
+      value={value}
+      onChange={handleChange}
+      onKeyDown={handleKeyDown}
+      onFocus={(event) => {
+        if (value) return;
+        const textarea = event.currentTarget;
+        onChange("• ");
+        requestAnimationFrame(() => textarea.setSelectionRange(2, 2));
+      }}
+    />
+  );
+}
+
 const STORAGE_BUCKET = "job-images";
 
 export default function MyJobPostModule({
@@ -147,8 +245,8 @@ export default function MyJobPostModule({
     setForm({
       position_title: job.position_title ?? "",
       description: job.description ?? "",
-      job_qualifications: job.job_qualifications ?? "",
-      requirements: job.requirements ?? "",
+      job_qualifications: formatBulletList(job.job_qualifications ?? ""),
+      requirements: formatBulletList(job.requirements ?? ""),
       location: job.location ?? "",
       employment_type: job.employment_type ?? "Full-time",
       job_classification: job.job_classification ?? "local",
@@ -399,8 +497,8 @@ export default function MyJobPostModule({
             employer_id: employerId,
             position_title: form.position_title.trim(),
             description: form.description.trim() || null,
-            job_qualifications: form.job_qualifications.trim() || null,
-            requirements: form.requirements.trim() || null,
+            job_qualifications: getSavedBulletList(form.job_qualifications),
+            requirements: getSavedBulletList(form.requirements),
             location: form.location.trim(),
             employment_type: form.employment_type,
             job_classification: form.job_classification,
@@ -432,8 +530,8 @@ export default function MyJobPostModule({
           .update({
             position_title: form.position_title.trim(),
             description: form.description.trim() || null,
-            job_qualifications: form.job_qualifications.trim() || null,
-            requirements: form.requirements.trim() || null,
+            job_qualifications: getSavedBulletList(form.job_qualifications),
+            requirements: getSavedBulletList(form.requirements),
             location: form.location.trim(),
             employment_type: form.employment_type,
             job_classification: form.job_classification,
@@ -833,26 +931,30 @@ export default function MyJobPostModule({
 
         <label className="text-sm font-semibold text-slate-700 md:col-span-2">
           Job Qualifications
-          <AutoResizeTextarea
+          <BulletListTextarea
             rows={4}
             value={form.job_qualifications}
-            onChange={(event) =>
-              updateField("job_qualifications", event.target.value)
-            }
+            onChange={(value) => updateField("job_qualifications", value)}
             placeholder="Enter the education, skills, experience, or certifications required for this position"
             className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
           />
+          <span className="mt-1 block text-xs font-normal text-slate-500">
+            Each line is a bullet point. Press Enter to add another.
+          </span>
         </label>
 
         <label className="text-sm font-semibold text-slate-700 md:col-span-2">
           Job Requirements
-          <AutoResizeTextarea
+          <BulletListTextarea
             rows={4}
             value={form.requirements}
-            onChange={(event) => updateField("requirements", event.target.value)}
+            onChange={(value) => updateField("requirements", value)}
             placeholder="Enter application requirements, such as documents or other instructions"
             className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-normal"
           />
+          <span className="mt-1 block text-xs font-normal text-slate-500">
+            Each line is a bullet point. Press Enter to add another.
+          </span>
         </label>
 
         <label className="text-sm font-semibold text-slate-700">
