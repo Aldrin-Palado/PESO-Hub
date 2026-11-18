@@ -5,7 +5,8 @@ import { supabase } from "../services/supabase";
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const STORAGE_KEY_PREFIX = "peso:last-activity:";
 const STORAGE_WRITE_INTERVAL_MS = 15 * 1000;
-const STAFF_STATUS_CHECK_INTERVAL_MS = 15 * 1000;
+const ACCOUNT_STATUS_CHECK_INTERVAL_MS = 15 * 1000;
+type MonitoredAccountRole = "Staff" | "Job Seeker" | "Employer";
 
 function SessionTimeout() {
   const navigate = useNavigate();
@@ -19,9 +20,9 @@ function SessionTimeout() {
     let disposed = false;
     let skippedUserId: string | null = null;
     let sessionCheckVersion = 0;
-    let monitoredStaffUserId: string | null = null;
-    let staffStatusCheckTimer: number | undefined;
-    let checkingStaffStatus = false;
+    let monitoredAccount: { id: string; role: MonitoredAccountRole } | null = null;
+    let accountStatusCheckTimer: number | undefined;
+    let checkingAccountStatus = false;
 
     const getStorageKey = (id: string) => `${STORAGE_KEY_PREFIX}${id}`;
 
@@ -32,66 +33,99 @@ function SessionTimeout() {
       }
     };
 
-    const stopStaffStatusMonitoring = () => {
-      monitoredStaffUserId = null;
-      if (staffStatusCheckTimer !== undefined) {
-        window.clearInterval(staffStatusCheckTimer);
-        staffStatusCheckTimer = undefined;
+    const stopAccountStatusMonitoring = () => {
+      monitoredAccount = null;
+      if (accountStatusCheckTimer !== undefined) {
+        window.clearInterval(accountStatusCheckTimer);
+        accountStatusCheckTimer = undefined;
       }
     };
 
-    const checkStaffStatus = async (id: string) => {
+    const checkAccountStatus = async (
+      account: { id: string; role: MonitoredAccountRole },
+    ) => {
       if (
         disposed ||
-        checkingStaffStatus ||
-        monitoredStaffUserId !== id
+        checkingAccountStatus ||
+        monitoredAccount?.id !== account.id ||
+        monitoredAccount.role !== account.role
       ) {
         return;
       }
 
-      checkingStaffStatus = true;
+      checkingAccountStatus = true;
       try {
-        const { data: staff, error } = await supabase
-          .from("peso_staff")
-          .select("is_active")
-          .eq("user_id", id)
-          .maybeSingle();
-
-        if (error) {
-          console.error("Could not verify Staff account status:", error);
-          return;
+        let isActive: boolean | null | undefined;
+        if (account.role === "Staff") {
+          const { data, error } = await supabase
+            .from("peso_staff")
+            .select("is_active")
+            .eq("user_id", account.id)
+            .maybeSingle();
+          if (error) {
+            console.error("Could not verify Staff account status:", error);
+            return;
+          }
+          isActive = data?.is_active;
+        } else if (account.role === "Job Seeker") {
+          const { data, error } = await supabase
+            .from("job_seeker")
+            .select("is_active")
+            .eq("user_id", account.id)
+            .maybeSingle();
+          if (error) {
+            console.error("Could not verify Job Seeker account status:", error);
+            return;
+          }
+          isActive = data?.is_active;
+        } else {
+          const { data, error } = await supabase
+            .from("employer")
+            .select("is_active")
+            .eq("user_id", account.id)
+            .maybeSingle();
+          if (error) {
+            console.error("Could not verify Employer account status:", error);
+            return;
+          }
+          isActive = data?.is_active;
         }
 
         if (
-          monitoredStaffUserId !== id ||
-          (staff && staff.is_active)
+          monitoredAccount?.id !== account.id ||
+          monitoredAccount.role !== account.role ||
+          isActive !== false
         ) {
           return;
         }
 
-        stopStaffStatusMonitoring();
+        stopAccountStatusMonitoring();
         const { error: signOutError } = await supabase.auth.signOut();
         if (signOutError) {
-          console.error("Could not sign out inactive Staff account:", signOutError);
+          console.error(`Could not sign out inactive ${account.role} account:`, signOutError);
         }
 
         if (!disposed) {
-          alert("This Staff account is inactive. Please contact the Admin.");
+          alert(`This ${account.role} account is inactive. Please contact the Admin.`);
           navigate("/login", { replace: true });
         }
       } finally {
-        checkingStaffStatus = false;
+        checkingAccountStatus = false;
       }
     };
 
-    const startStaffStatusMonitoring = (id: string) => {
-      stopStaffStatusMonitoring();
-      monitoredStaffUserId = id;
-      staffStatusCheckTimer = window.setInterval(() => {
+    const startAccountStatusMonitoring = (
+      id: string,
+      role: MonitoredAccountRole,
+    ) => {
+      stopAccountStatusMonitoring();
+      const account = { id, role };
+      monitoredAccount = account;
+      accountStatusCheckTimer = window.setInterval(() => {
         if (document.visibilityState === "visible") {
-          void checkStaffStatus(id);
+          void checkAccountStatus(account);
         }
-      }, STAFF_STATUS_CHECK_INTERVAL_MS);
+      }, ACCOUNT_STATUS_CHECK_INTERVAL_MS);
     };
 
     const expireSession = async () => {
@@ -153,12 +187,51 @@ function SessionTimeout() {
       }
     };
 
+    const startIdleMonitoring = (id: string, resetActivity: boolean) => {
+      userId = id;
+      expiring = false;
+      skippedUserId = null;
+
+      if (resetActivity) {
+        lastActivityAt = Date.now();
+        writeLastActivity(lastActivityAt);
+        lastStorageWriteAt = lastActivityAt;
+        scheduleExpiration();
+        return;
+      }
+
+      let storedActivity: string | null = null;
+      try {
+        storedActivity = localStorage.getItem(getStorageKey(id));
+      } catch (error) {
+        console.error("Could not read persisted session activity:", error);
+      }
+
+      const parsedActivity = storedActivity
+        ? Number(storedActivity)
+        : Number.NaN;
+      const now = Date.now();
+
+      if (Number.isFinite(parsedActivity) && parsedActivity > 0) {
+        lastActivityAt = Math.min(parsedActivity, now);
+        if (parsedActivity > now) {
+          writeLastActivity(lastActivityAt);
+        }
+      } else {
+        lastActivityAt = now;
+        writeLastActivity(lastActivityAt);
+      }
+
+      lastStorageWriteAt = lastActivityAt;
+      scheduleExpiration();
+    };
+
     const activateSession = async (
       id: string,
       resetActivity: boolean,
     ) => {
-      if (monitoredStaffUserId && monitoredStaffUserId !== id) {
-        stopStaffStatusMonitoring();
+      if (monitoredAccount && monitoredAccount.id !== id) {
+        stopAccountStatusMonitoring();
       }
 
       if (
@@ -187,7 +260,7 @@ function SessionTimeout() {
 
       if (admin) {
         if (checkVersion === sessionCheckVersion) {
-          stopStaffStatusMonitoring();
+          stopAccountStatusMonitoring();
           skippedUserId = id;
           clearSession();
         }
@@ -224,15 +297,15 @@ function SessionTimeout() {
         if (checkVersion === sessionCheckVersion) {
           skippedUserId = id;
           clearSession();
-          startStaffStatusMonitoring(id);
+          startAccountStatusMonitoring(id, "Staff");
         }
         return;
       }
-      stopStaffStatusMonitoring();
+      stopAccountStatusMonitoring();
 
       const { data: jobSeeker, error: jobSeekerError } = await supabase
         .from("job_seeker")
-        .select("job_seeker_id")
+        .select("job_seeker_id, is_active")
         .eq("user_id", id)
         .maybeSingle();
 
@@ -243,7 +316,7 @@ function SessionTimeout() {
 
       const { data: employer, error: employerError } = await supabase
         .from("employer")
-        .select("employer_id")
+        .select("employer_id, is_active")
         .eq("user_id", id)
         .maybeSingle();
 
@@ -254,47 +327,38 @@ function SessionTimeout() {
 
       if (checkVersion !== sessionCheckVersion) return;
 
+      const inactiveRole = jobSeeker?.is_active === false
+        ? "Job Seeker"
+        : employer?.is_active === false
+          ? "Employer"
+          : null;
+      if (inactiveRole) {
+        skippedUserId = id;
+        const { error: signOutError } = await supabase.auth.signOut();
+        if (signOutError) {
+          console.error(`Could not sign out inactive ${inactiveRole} account:`, signOutError);
+        }
+        if (!disposed) {
+          alert(`This ${inactiveRole} account is inactive. Please contact the Admin.`);
+          navigate("/login", { replace: true });
+        }
+        return;
+      }
+
       if (!jobSeeker && !employer) {
         skippedUserId = id;
         clearSession();
         return;
       }
 
-      userId = id;
-      expiring = false;
-      skippedUserId = null;
-
-      if (resetActivity) {
-        lastActivityAt = Date.now();
-        writeLastActivity(lastActivityAt);
-        scheduleExpiration();
-        return;
+      if (userId && userId !== id) {
+        clearSession();
       }
-
-      let storedActivity: string | null = null;
-      try {
-        storedActivity = localStorage.getItem(getStorageKey(id));
-      } catch (error) {
-        console.error("Could not read persisted session activity:", error);
-      }
-
-      const parsedActivity = storedActivity
-        ? Number(storedActivity)
-        : Number.NaN;
-      const now = Date.now();
-
-      if (Number.isFinite(parsedActivity) && parsedActivity > 0) {
-        lastActivityAt = Math.min(parsedActivity, now);
-        if (parsedActivity > now) {
-          writeLastActivity(lastActivityAt);
-        }
-      } else {
-        lastActivityAt = now;
-        writeLastActivity(lastActivityAt);
-      }
-
-      lastStorageWriteAt = lastActivityAt;
-      scheduleExpiration();
+      startIdleMonitoring(id, resetActivity);
+      startAccountStatusMonitoring(
+        id,
+        jobSeeker ? "Job Seeker" : "Employer",
+      );
     };
 
     const clearSession = () => {
@@ -319,8 +383,8 @@ function SessionTimeout() {
       lastActivityAt = Date.now();
       if (lastActivityAt - lastStorageWriteAt >= STORAGE_WRITE_INTERVAL_MS) {
         writeLastActivity(lastActivityAt);
-        scheduleExpiration();
       }
+      scheduleExpiration();
     };
 
     const handleStorage = (event: StorageEvent) => {
@@ -339,8 +403,8 @@ function SessionTimeout() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         scheduleExpiration();
-        if (monitoredStaffUserId) {
-          void checkStaffStatus(monitoredStaffUserId);
+        if (monitoredAccount) {
+          void checkAccountStatus(monitoredAccount);
         }
       }
     };
@@ -355,7 +419,7 @@ function SessionTimeout() {
       (event, session) => {
         if (event === "SIGNED_OUT") {
           skippedUserId = null;
-          stopStaffStatusMonitoring();
+          stopAccountStatusMonitoring();
           clearSession();
         } else if (session?.user) {
           void activateSession(session.user.id, event === "SIGNED_IN");
@@ -379,6 +443,7 @@ function SessionTimeout() {
     document.addEventListener("keydown", recordActivity);
     document.addEventListener("touchstart", recordActivity);
     document.addEventListener("scroll", recordActivity, true);
+    document.addEventListener("wheel", recordActivity, { passive: true });
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("pagehide", handlePageHide);
     window.addEventListener("storage", handleStorage);
@@ -386,13 +451,14 @@ function SessionTimeout() {
     return () => {
       disposed = true;
       clearTimer();
-      stopStaffStatusMonitoring();
+      stopAccountStatusMonitoring();
       authListener.subscription.unsubscribe();
       document.removeEventListener("pointerdown", recordActivity);
       document.removeEventListener("pointermove", recordActivity);
       document.removeEventListener("keydown", recordActivity);
       document.removeEventListener("touchstart", recordActivity);
       document.removeEventListener("scroll", recordActivity, true);
+      document.removeEventListener("wheel", recordActivity);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("storage", handleStorage);
