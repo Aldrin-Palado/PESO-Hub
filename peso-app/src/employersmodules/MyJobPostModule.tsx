@@ -6,6 +6,7 @@ import {
   type KeyboardEvent,
   type TextareaHTMLAttributes,
 } from "react";
+import AppIcon from "../components/AppIcon";
 import AutoResizeTextarea from "../components/AutoResizeTextarea";
 import { supabase } from "../services/supabase";
 import { getEmployerRegistrationChecklist } from "../services/employerRegistration";
