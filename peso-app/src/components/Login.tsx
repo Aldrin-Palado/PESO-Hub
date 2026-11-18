@@ -112,14 +112,14 @@ function Login() {
         container.getBoundingClientRect().width,
       );
 
-      // Google Identity Services adds approximately 20px to the iframe
-      // width internally, so reserve that space to prevent horizontal clipping.
-      const buttonWidth = Math.min(400, availableWidth - 20);
+      // Google adds about 20px of horizontal iframe spacing.
+      // Reserve that space so the generated iframe fits inside the container.
+      const buttonWidth = Math.min(380, availableWidth - 20);
 
       // Google requires a minimum button width of 200px.
       if (buttonWidth < 200) return;
 
-      // Avoid clearing and recreating the Google button when its width is unchanged.
+      // Avoid rebuilding the button when its effective width has not changed.
       if (buttonWidth === lastRenderedWidth && container.childElementCount > 0) {
         return;
       }
@@ -135,6 +135,24 @@ function Login() {
         shape: "rectangular",
         width: buttonWidth,
       });
+
+      // Center Google's generated wrapper inside the available container.
+      const generatedWrapper = container.firstElementChild as HTMLElement | null;
+      if (generatedWrapper) {
+        generatedWrapper.style.display = "flex";
+        generatedWrapper.style.justifyContent = "center";
+        generatedWrapper.style.width = "100%";
+        generatedWrapper.style.maxWidth = "100%";
+        generatedWrapper.style.marginInline = "auto";
+        generatedWrapper.style.boxSizing = "border-box";
+      }
+
+      const generatedFrame = container.querySelector("iframe");
+      if (generatedFrame) {
+        generatedFrame.style.display = "block";
+        generatedFrame.style.maxWidth = "100%";
+        generatedFrame.style.marginInline = "auto";
+      }
     };
 
     const initializeGoogle = () => {
@@ -798,18 +816,19 @@ function Login() {
                   </div>
 
                   {/* Google OAuth */}
-                  <div className="flex w-full justify-center">
-                  <div
-                    ref={googleButtonRef}
-                    id="google-sign-in-button"
-                    className="mx-auto"
-                    style={{
-                      width: "400px",
-                      maxWidth: "100%",
-                      display: "flex",
-                      justifyContent: "center",
-                   }}
-                   />
+                  <div className="flex w-full min-w-0 justify-center overflow-visible">
+                    <div
+                      ref={googleButtonRef}
+                      id="google-sign-in-button"
+                      className="mx-auto flex w-full min-w-0 justify-center overflow-visible"
+                      style={{
+                        width: "100%",
+                        maxWidth: "400px",
+                        minWidth: 0,
+                        marginInline: "auto",
+                        boxSizing: "border-box",
+                      }}
+                    />
                   </div>
                   {googleButtonError && (
                     <p role="alert" className="text-sm text-red-700">
