@@ -96,6 +96,9 @@ information in chat messages.
 
 The existing role-specific **Messages** screen remains the PESO-Hub conversation UI.
 Messages are saved in `peso_messages` immediately, then delivered by a server-side outbox.
+An automatic acknowledgment is sent only when a job seeker or employer starts that day's
+conversation with the Admin inbox, and is limited to one per account conversation per day
+(Asia/Manila time). The daily conversation record remains even if a message is deleted.
 Gmail replies are synchronized into that same conversation using the Gmail thread ID,
 verified participant addresses, the official mailbox recipient, and a conversation marker.
 Only threads first created by a PESO-Hub message are eligible; general/personal inbox mail
