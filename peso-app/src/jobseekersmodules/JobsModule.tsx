@@ -105,6 +105,7 @@ export default function JobsModule({
   const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
   const [location, setLocation] = useState("All");
+  const [classification, setClassification] = useState("All");
   const [type, setType] = useState("All");
   const [employer, setEmployer] = useState("All");
   const [savedJobs, setSavedJobs] = useState<string[]>([]);
@@ -290,6 +291,9 @@ export default function JobsModule({
         location === "All" ||
         job.location.toLowerCase().includes(location.toLowerCase());
 
+      const classificationMatch =
+        classification === "All" || job.classification === classification;
+
       const typeMatch =
         type === "All" || job.type === type;
 
@@ -297,9 +301,15 @@ export default function JobsModule({
         employer === "All" ||
         job.company.trim().toLowerCase() === employer.toLowerCase();
 
-      return searchMatch && locationMatch && typeMatch && employerMatch;
+      return (
+        searchMatch &&
+        locationMatch &&
+        classificationMatch &&
+        typeMatch &&
+        employerMatch
+      );
     });
-  }, [jobs, search, location, type, employer]);
+  }, [jobs, search, location, classification, type, employer]);
 
   const employerOptions = useMemo(() => {
     const employers = new Map<string, string>();
@@ -662,6 +672,18 @@ export default function JobsModule({
           />
 
           <FilterDropdown
+            value={classification}
+            onChange={setClassification}
+            ariaLabel="Filter jobs by local or international classification"
+            options={[
+              { value: "All", label: "All Classifications" },
+              { value: "local", label: "Local" },
+              { value: "international", label: "International" },
+            ]}
+            className="min-w-[10rem] rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-blue-500"
+          />
+
+          <FilterDropdown
             value={type}
             onChange={setType}
             ariaLabel="Filter jobs by employment type"
@@ -760,7 +782,7 @@ export default function JobsModule({
                 className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:border-blue-200 hover:shadow-md"
               >
                 <div className="px-5 pb-5 pt-5 sm:px-7">
-                  <div className="flex items-start gap-3">
+                  <div className="flex flex-wrap items-start gap-3">
                     <button
                       type="button"
                       onClick={() => setCompanyModalJob(job)}
@@ -781,46 +803,48 @@ export default function JobsModule({
                         job.company.charAt(0).toUpperCase()
                       )}
                     </button>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-medium text-slate-400">{postedDate}</p>
-                      <p className="mt-0.5 flex items-center gap-1.5 text-sm font-medium text-slate-700">
-                        <button
-                          type="button"
-                          onClick={() => setCompanyModalJob(job)}
-                          className="truncate text-left hover:text-blue-700 hover:underline focus:outline-none focus:underline"
+                    <p className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-medium text-slate-700">
+                      <button
+                        type="button"
+                        onClick={() => setCompanyModalJob(job)}
+                        className="truncate text-left hover:text-blue-700 hover:underline focus:outline-none focus:underline"
+                      >
+                        {job.company}
+                      </button>
+                      {job.isPeso ? (
+                        <OfficialPESOBadge />
+                      ) : job.employerVerified ? (
+                        <span
+                          title="Verified employer"
+                          className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"
                         >
-                          {job.company}
-                        </button>
-                        {job.isPeso ? (
-                          <OfficialPESOBadge />
-                        ) : job.employerVerified ? (
-                          <span
-                            title="Verified employer"
-                            className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"
-                          >
-                            <AppIcon name="check" className="h-3 w-3" />
-                          </span>
-                        ) : null}
+                          <AppIcon name="check" className="h-3 w-3" />
+                        </span>
+                      ) : null}
+                    </p>
+                    <div className="w-full pl-14 text-left sm:w-auto sm:pl-0 sm:text-right">
+                      <p className="text-[11px] font-medium text-slate-400">
+                        {postedDate}
                       </p>
-                      <h3 className="mt-2 text-lg font-black leading-snug text-slate-950 sm:text-xl">
-                        {job.title}
-                      </h3>
-                      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-                        <span className="capitalize">{job.classification}</span>
-                        <span aria-hidden="true">·</span>
-                        <span>{job.type}</span>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs font-medium text-slate-600">
-                        <span className="inline-flex items-center gap-1.5">
-                          <AppIcon name="dollar" className="h-3.5 w-3.5 text-amber-500" />
-                          {job.salary}
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                          <AppIcon name="mapPin" className="h-3.5 w-3.5 text-slate-500" />
-                          {job.location}
-                        </span>
-                      </div>
+                      <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 sm:justify-end">
+                        <AppIcon name="mapPin" className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                        {job.location}
+                      </p>
                     </div>
+                  </div>
+                  <h3 className="mt-3 text-lg font-black leading-snug text-slate-950 sm:text-xl">
+                    {job.title}
+                  </h3>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                    <span className="capitalize">{job.classification}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{job.type}</span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs font-medium text-slate-600">
+                    <span className="inline-flex items-center gap-1.5">
+                      <AppIcon name="dollar" className="h-3.5 w-3.5 text-amber-500" />
+                      {job.salary}
+                    </span>
                   </div>
                 </div>
 
