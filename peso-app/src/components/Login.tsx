@@ -798,21 +798,18 @@ function Login() {
                   </div>
 
                   {/* Google OAuth */}
+                  <div className="flex w-full justify-center">
                   <div
-                    className="mx-auto flex min-h-11 w-full min-w-0 justify-center overflow-visible"
-                    style={{ maxWidth: "400px" }}
-                  >
-                    <div
-                      ref={googleButtonRef}
-                      id="google-sign-in-button"
-                      className="w-full min-w-0 overflow-visible"
-                      style={{
-                        width: "100%",
-                        maxWidth: "400px",
-                        minWidth: 0,
-                        boxSizing: "border-box",
-                      }}
-                    />
+                    ref={googleButtonRef}
+                    id="google-sign-in-button"
+                    className="mx-auto"
+                    style={{
+                      width: "400px",
+                      maxWidth: "100%",
+                      display: "flex",
+                      justifyContent: "center",
+                   }}
+                   />
                   </div>
                   {googleButtonError && (
                     <p role="alert" className="text-sm text-red-700">
