@@ -174,7 +174,6 @@ export default function JobPostsModule({
               options={[
                 { value: "All", label: "All Status" },
                 { value: "Active", label: "Active" },
-                { value: "Inactive", label: "Inactive" },
                 { value: "Closed", label: "Closed" },
               ]}
               className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-normal text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
