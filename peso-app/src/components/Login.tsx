@@ -108,29 +108,24 @@ function Login() {
       }
 
       const container = googleButtonRef.current;
-
-      // Keep the Google button within the available login-form width.
       const availableWidth = Math.floor(
         container.getBoundingClientRect().width,
       );
-      const buttonWidth = Math.min(400, availableWidth);
 
-      // Google Identity Services requires a usable width. Wait until the
-      // credentials panel is laid out before rendering.
+      // Google Identity Services adds approximately 20px to the iframe
+      // width internally, so reserve that space to prevent horizontal clipping.
+      const buttonWidth = Math.min(400, availableWidth - 20);
+
+      // Google requires a minimum button width of 200px.
       if (buttonWidth < 200) return;
 
-      container.style.width = `${buttonWidth}px`;
-      container.style.maxWidth = "100%";
-      container.style.boxSizing = "border-box";
-      container.style.overflow = "visible";
-
-      // Avoid repeatedly rebuilding the Google iframe at the same width.
+      // Avoid clearing and recreating the Google button when its width is unchanged.
       if (buttonWidth === lastRenderedWidth && container.childElementCount > 0) {
         return;
       }
 
       lastRenderedWidth = buttonWidth;
-      container.replaceChildren();
+      container.innerHTML = "";
 
       window.google.accounts.id.renderButton(container, {
         type: "standard",
@@ -139,18 +134,6 @@ function Login() {
         text: "continue_with",
         shape: "rectangular",
         width: buttonWidth,
-      });
-
-      // Keep Google's generated wrapper and iframe within their host.
-      const renderedWrapper = container.firstElementChild as HTMLElement | null;
-      if (renderedWrapper) {
-        renderedWrapper.style.maxWidth = "100%";
-        renderedWrapper.style.boxSizing = "border-box";
-      }
-
-      container.querySelectorAll("iframe").forEach((iframe) => {
-        iframe.style.maxWidth = "100%";
-        iframe.style.boxSizing = "border-box";
       });
     };
 
