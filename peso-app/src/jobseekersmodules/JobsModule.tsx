@@ -783,45 +783,47 @@ export default function JobsModule({
               >
                 <div className="px-5 pb-5 pt-5 sm:px-7">
                   <div className="flex flex-wrap items-start gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setCompanyModalJob(job)}
-                      aria-label={`View ${job.company} company profile`}
-                      className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-black text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                        job.isPeso ? "bg-white" : "bg-[#0759AE]"
-                      }`}
-                    >
-                      {job.companyLogoUrl ? (
-                        <img
-                          src={job.companyLogoUrl}
-                          alt=""
-                          className={`h-full w-full ${
-                            job.isPeso ? "object-contain" : "object-cover"
-                          }`}
-                        />
-                      ) : (
-                        job.company.charAt(0).toUpperCase()
-                      )}
-                    </button>
-                    <p className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-medium text-slate-700">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
                       <button
                         type="button"
                         onClick={() => setCompanyModalJob(job)}
-                        className="truncate text-left hover:text-blue-700 hover:underline focus:outline-none focus:underline"
+                        aria-label={`View ${job.company} company profile`}
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-black text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                          job.isPeso ? "bg-white" : "bg-[#0759AE]"
+                        }`}
                       >
-                        {job.company}
+                        {job.companyLogoUrl ? (
+                          <img
+                            src={job.companyLogoUrl}
+                            alt=""
+                            className={`h-full w-full ${
+                              job.isPeso ? "object-contain" : "object-cover"
+                            }`}
+                          />
+                        ) : (
+                          job.company.charAt(0).toUpperCase()
+                        )}
                       </button>
-                      {job.isPeso ? (
-                        <OfficialPESOBadge />
-                      ) : job.employerVerified ? (
-                        <span
-                          title="Verified employer"
-                          className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"
+                      <p className="flex min-w-0 items-center gap-1.5 text-base font-semibold text-slate-700 sm:text-lg">
+                        <button
+                          type="button"
+                          onClick={() => setCompanyModalJob(job)}
+                          className="truncate text-left hover:text-blue-700 hover:underline focus:outline-none focus:underline"
                         >
-                          <AppIcon name="check" className="h-3 w-3" />
-                        </span>
-                      ) : null}
-                    </p>
+                          {job.company}
+                        </button>
+                        {job.isPeso ? (
+                          <OfficialPESOBadge />
+                        ) : job.employerVerified ? (
+                          <span
+                            title="Verified employer"
+                            className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"
+                          >
+                            <AppIcon name="check" className="h-3 w-3" />
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
                     <div className="w-full pl-14 text-left sm:w-auto sm:pl-0 sm:text-right">
                       <p className="text-[11px] font-medium text-slate-400">
                         {postedDate}
