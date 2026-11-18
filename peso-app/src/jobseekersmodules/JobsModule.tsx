@@ -824,7 +824,7 @@ export default function JobsModule({
                         ) : null}
                       </p>
                     </div>
-                    <div className="w-full text-center sm:w-40">
+                    <div className="w-full text-center sm:w-40 sm:self-center sm:text-right">
                       <p className="text-[11px] font-medium text-slate-400">
                         {postedDate}
                       </p>
