@@ -43,7 +43,6 @@ export default function SavedJobsModule({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
-  const [unavailableCount, setUnavailableCount] = useState(0);
   const [removingJobId, setRemovingJobId] = useState<string | null>(null);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
 
@@ -69,7 +68,6 @@ export default function SavedJobsModule({
         if (savedIds.length === 0) {
           if (active) {
             setJobs([]);
-            setUnavailableCount(0);
           }
           return;
         }
@@ -141,9 +139,6 @@ export default function SavedJobsModule({
 
         if (active) {
           setJobs(availableSavedJobs);
-          setUnavailableCount(
-            Math.max(0, savedIds.length - availableSavedJobs.length)
-          );
         }
       } catch (error) {
         if (!active) return;
@@ -155,7 +150,6 @@ export default function SavedJobsModule({
           }`
         );
         setJobs([]);
-        setUnavailableCount(0);
       } finally {
         if (active) setLoading(false);
       }
@@ -246,13 +240,6 @@ export default function SavedJobsModule({
             Save job opportunities from the Jobs page and they will appear here.
           </p>
 
-          {unavailableCount > 0 && (
-            <p className="mx-auto mt-3 max-w-md text-xs text-amber-700">
-              {unavailableCount} previously saved job
-              {unavailableCount === 1 ? " is" : "s are"} no longer open or available.
-            </p>
-          )}
-
           <button
             type="button"
             onClick={onNavigateToJobs}
@@ -263,14 +250,6 @@ export default function SavedJobsModule({
         </div>
       ) : (
         <>
-          {unavailableCount > 0 && (
-            <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              {unavailableCount} saved job
-              {unavailableCount === 1 ? " is" : "s are"} no longer open or available, so
-              {unavailableCount === 1 ? " it is" : " they are"} not shown here.
-            </p>
-          )}
-
           <div className="space-y-4">
             {jobs.map((job) => {
               const postedDate = job.datePosted

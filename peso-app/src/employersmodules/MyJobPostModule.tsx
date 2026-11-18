@@ -189,6 +189,7 @@ export default function MyJobPostModule({
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<JobForm>(emptyForm);
+  const [jobSearch, setJobSearch] = useState("");
 
   const [selectedImage, setSelectedImage] =
     useState<File | null>(null);
@@ -984,6 +985,23 @@ export default function MyJobPostModule({
     </form>
   );
 
+  const normalizedJobSearch = jobSearch.trim().toLowerCase();
+  const filteredJobPosts = jobs.filter((job) => {
+    if (showForm && editingId === job.job_vacancy_id) return true;
+    if (!normalizedJobSearch) return true;
+
+    return [
+      job.position_title,
+      job.location,
+      job.employment_type,
+      job.job_classification,
+      job.status,
+      job.description,
+      job.job_qualifications,
+      job.requirements,
+    ].some((value) => value?.toLowerCase().includes(normalizedJobSearch));
+  });
+
   return (
     <div className="space-y-6">
 
@@ -996,13 +1014,28 @@ export default function MyJobPostModule({
           <p className="mt-1 text-sm text-slate-500">{publisherDescription}</p>
         </div>
 
-        <button
-          type="button"
-          onClick={openCreateForm}
-          className="rounded-xl bg-[#0446A7] px-5 py-3 text-sm font-bold text-white hover:bg-blue-800"
-        >
-          + New Job Post
-        </button>
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+          <label className="relative w-full sm:w-64">
+            <span className="sr-only">Search job posts</span>
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <AppIcon name="search" className="h-4 w-4" />
+            </span>
+            <input
+              type="search"
+              value={jobSearch}
+              onChange={(event) => setJobSearch(event.target.value)}
+              placeholder="Search job posts..."
+              className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={openCreateForm}
+            className="shrink-0 rounded-xl bg-[#0446A7] px-5 py-3 text-sm font-bold text-white hover:bg-blue-800"
+          >
+            + New Job Post
+          </button>
+        </div>
       </div>
 
       {/* MESSAGE */}
@@ -1040,9 +1073,18 @@ export default function MyJobPostModule({
             Create Job Post
           </button>
         </div>
+      ) : filteredJobPosts.length === 0 ? (
+        <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center">
+          <h2 className="text-lg font-bold text-[#123B70]">
+            No Matching Job Posts
+          </h2>
+          <p className="mt-2 text-sm text-slate-500">
+            Try a different job title, location, type, or status.
+          </p>
+        </div>
       ) : (
         <div className="grid gap-6">
-          {jobs.map((job) =>
+          {filteredJobPosts.map((job) =>
             showForm && editingId === job.job_vacancy_id ? (
               <div key={job.job_vacancy_id} className="mx-auto w-full max-w-3xl">
                 {renderJobForm()}
