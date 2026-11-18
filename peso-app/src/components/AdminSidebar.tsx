@@ -91,7 +91,7 @@ export default function AdminSidebar({
     if (!window.confirm("Are you sure you want to log out?")) return;
 
     await supabase.auth.signOut();
-    window.location.replace("/login");
+    window.location.replace("/");
   };
 
   return (

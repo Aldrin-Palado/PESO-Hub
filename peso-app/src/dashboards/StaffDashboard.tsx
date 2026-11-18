@@ -454,7 +454,7 @@ export default function StaffDashboard() {
 
     await supabase.auth.signOut();
 
-    window.location.replace("/login");
+    window.location.replace("/");
   };
 
   /* =====================================================
