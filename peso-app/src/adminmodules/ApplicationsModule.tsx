@@ -134,7 +134,7 @@ export default function ApplicationsModule({
   setStatusFilter,
   loading,
   canDecideApplications,
-  canDeleteApplications = true,
+  canDeleteApplications = false,
   onUpdateStatus,
   onDecideApplication,
   onDelete,
@@ -723,7 +723,7 @@ export default function ApplicationsModule({
                         {openingResumeId === rowId ? "Opening..." : "Resume"}
                       </button>
                     )}
-                    {applicationScope === "peso" && canDeleteApplications && (
+                    {canDeleteApplications && (
                       <button
                         type="button"
                         disabled={!application.application_id || deletingId === rowId}
