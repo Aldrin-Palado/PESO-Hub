@@ -1534,10 +1534,6 @@ function JobApplications({ userId }: { userId: string | null }) {
     throw new Error("Application decisions are unavailable to staff.");
   };
 
-  const unsupportedDelete = async () => {
-    throw new Error("Application deletion is unavailable to staff.");
-  };
-
   return (
     <ApplicationsModule
       applications={applications}
@@ -1548,10 +1544,8 @@ function JobApplications({ userId }: { userId: string | null }) {
       setStatusFilter={setStatusFilter}
       loading={loading}
       canDecideApplications={false}
-      canDeleteApplications={false}
       onUpdateStatus={updateApplicationStatus}
       onDecideApplication={unsupportedDecision}
-      onDelete={unsupportedDelete}
       LoadingMessage={() => (
         <p className="p-6 text-sm text-slate-500">Loading applications...</p>
       )}

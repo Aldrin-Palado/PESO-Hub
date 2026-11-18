@@ -2013,27 +2013,6 @@ export default function AdminDashboard() {
     return result;
   };
 
-  const deleteApplication = async (applicationId: string) => {
-    const { data, error } = await supabase
-      .from("application")
-      .delete()
-      .eq("application_id", applicationId)
-      .select("application_id")
-      .maybeSingle();
-
-    if (error) {
-      console.error("Application deletion error:", error);
-      throw new Error(`Application could not be deleted: ${error.message}`);
-    }
-    if (!data) {
-      throw new Error("Application was not deleted because the record no longer exists.");
-    }
-
-    setApplications((current) =>
-      current.filter((application) => application.application_id !== applicationId),
-    );
-  };
-
   /* ============================================================
      FILTERED EMPLOYERS
   ============================================================ */
@@ -2209,10 +2188,8 @@ export default function AdminDashboard() {
             setStatusFilter={setApplicationStatusFilter}
             loading={moduleLoading}
             canDecideApplications={isSuperadmin}
-            canDeleteApplications={isSuperadmin}
             onUpdateStatus={updateApplicationStatus}
             onDecideApplication={decideApplication}
-            onDelete={deleteApplication}
             LoadingMessage={LoadingMessage}
             EmptyMessage={EmptyMessage}
             formatDate={formatDate}

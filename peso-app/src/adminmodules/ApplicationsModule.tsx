@@ -48,13 +48,11 @@ type Props = {
   setStatusFilter: (value: string) => void;
   loading: boolean;
   canDecideApplications: boolean;
-  canDeleteApplications?: boolean;
   onUpdateStatus: (applicationId: string, status: string) => Promise<void>;
   onDecideApplication: (
     applicationId: string,
     approved: boolean,
   ) => Promise<ApplicationDecisionResult>;
-  onDelete: (applicationId: string) => Promise<void>;
   LoadingMessage: React.ComponentType;
   EmptyMessage: React.ComponentType<{ message: string }>;
   formatDate: (date?: string) => string;
@@ -134,10 +132,8 @@ export default function ApplicationsModule({
   setStatusFilter,
   loading,
   canDecideApplications,
-  canDeleteApplications = false,
   onUpdateStatus,
   onDecideApplication,
-  onDelete,
   LoadingMessage,
   EmptyMessage,
   formatDate,
@@ -153,7 +149,6 @@ export default function ApplicationsModule({
   const [dateTo, setDateTo] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [decisionNotice, setDecisionNotice] = useState("");
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [expandedApplicants, setExpandedApplicants] = useState<Set<string>>(
     () => new Set(),
@@ -349,25 +344,6 @@ export default function ApplicationsModule({
       );
     } finally {
       setUpdatingId(null);
-    }
-  };
-
-  const handleDelete = async (application: Application, rowId: string) => {
-    if (!application.application_id) return;
-    const confirmed = window.confirm(
-      `Delete the application from ${application.applicant_name || "this applicant"} for ${application.position_title || "this job"}? This cannot be undone.`,
-    );
-    if (!confirmed) return;
-    setDeletingId(rowId);
-    setActionError("");
-    try {
-      await onDelete(application.application_id);
-    } catch (error) {
-      setActionError(
-        error instanceof Error ? error.message : "Unable to delete application.",
-      );
-    } finally {
-      setDeletingId(null);
     }
   };
 
@@ -721,16 +697,6 @@ export default function ApplicationsModule({
                         className="rounded-md border border-slate-200 px-2 py-1 text-[9px] font-semibold text-slate-600 disabled:opacity-50"
                       >
                         {openingResumeId === rowId ? "Opening..." : "Resume"}
-                      </button>
-                    )}
-                    {canDeleteApplications && (
-                      <button
-                        type="button"
-                        disabled={!application.application_id || deletingId === rowId}
-                        onClick={() => void handleDelete(application, rowId)}
-                        className="rounded-md border border-slate-200 px-2 py-1 text-[9px] font-semibold text-slate-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
-                      >
-                        {deletingId === rowId ? "Deleting..." : "Delete"}
                       </button>
                     )}
                   </div>
