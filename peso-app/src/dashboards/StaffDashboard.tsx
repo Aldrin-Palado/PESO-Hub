@@ -12,10 +12,10 @@ import type {
   EmployerVerificationDocument,
 } from "../services/employerRegistration";
 import {
-  parseJobPostEmployerSummaries,
   parseStaffDashboardOverviewCounts,
 } from "../services/adminDashboardData";
 import MessagesModule from "../adminmodules/MessagesModule";
+import PESOJobPostsModule from "../adminmodules/PESOJobPostsModule";
 import PESOPosts from "../adminmodules/PESOPosts";
 import { useUnreadMessages } from "../services/useUnreadMessages";
 
@@ -49,7 +49,7 @@ type ModuleName =
   | "Messages"
   | "PESO Posts";
 
-type StaffRecordPage = "Job Posts" | "Employers" | "Job Seekers";
+type StaffRecordPage = "Employers" | "Job Seekers";
 type StaffRecord = Record<string, unknown>;
 
 type StaffApplication = {
@@ -291,11 +291,7 @@ export default function StaffDashboard() {
   };
 
   useEffect(() => {
-    if (
-      activePage !== "Job Posts" &&
-      activePage !== "Employers" &&
-      activePage !== "Job Seekers"
-    ) {
+    if (activePage !== "Employers" && activePage !== "Job Seekers") {
       return;
     }
 
@@ -309,41 +305,7 @@ export default function StaffDashboard() {
       try {
         let rows: StaffRecord[] = [];
 
-        if (activePage === "Job Posts") {
-          const [jobsResult, employersResult] = await Promise.all([
-            supabase
-              .from("job_vacancy")
-              .select(
-                "job_vacancy_id, employer_id, position_title, description, job_qualifications, requirements, location, employment_type, salary_min, salary_max, salary_period, vacancies_available, status, date_posted, deadline",
-              )
-              .order("date_posted", { ascending: false }),
-            supabase.rpc("get_job_post_employer_summaries"),
-          ]);
-
-          if (jobsResult.error) throw jobsResult.error;
-          if (employersResult.error) {
-            console.error("Employer names could not be loaded:", employersResult.error);
-            if (!cancelled) {
-              setRecordsError(
-                `Job posts loaded, but employer names could not be loaded: ${employersResult.error.message}`,
-              );
-            }
-          }
-
-          const employerNames = new Map(
-            parseJobPostEmployerSummaries(employersResult.data).map((employer) => [
-              employer.employer_id,
-              { name: employer.name, logo_url: employer.logo_url },
-            ]),
-          );
-          rows = (jobsResult.data ?? []).map((job) => ({
-            ...job,
-            employer_name:
-              employerNames.get(job.employer_id)?.name || job.employer_id,
-            employer_logo_url:
-              employerNames.get(job.employer_id)?.logo_url || null,
-          }));
-        } else if (activePage === "Employers") {
+        if (activePage === "Employers") {
           const { data, error } = await supabase
             .from("employer")
             .select(
@@ -538,14 +500,7 @@ export default function StaffDashboard() {
         return <Analytics />;
 
       case "Job Posts":
-        return (
-          <StaffRecordsModule
-            page="Job Posts"
-            records={records}
-            loading={recordsLoading}
-            error={recordsError}
-          />
-        );
+        return <PESOJobPostsModule />;
 
       case "Job Application":
         return <JobApplications userId={staff?.user_id ?? null} />;
@@ -1006,77 +961,45 @@ function StaffRecordsModule({
   const columns: {
     label: string;
     value: (record: StaffRecord) => string;
-  }[] =
-    page === "Job Posts"
-      ? [
-          { label: "Job Title", value: (record) => textValue(record.position_title) },
-          { label: "Employer", value: (record) => textValue(record.employer_name) },
-          { label: "Location", value: (record) => textValue(record.location) },
-          { label: "Employment Type", value: (record) => textValue(record.employment_type) },
-          {
-            label: "Salary Range",
-            value: (record) =>
-              record.salary_min != null || record.salary_max != null
-                ? `${textValue(record.salary_min, "-")} – ${textValue(record.salary_max, "-")} per ${record.salary_period === "yearly" ? "year" : "month"}`
-                : "-",
-          },
-          { label: "Openings", value: (record) => textValue(record.vacancies_available) },
-          {
-            label: "Status",
-            value: (record) =>
-              record.status === "open"
-                ? "Active"
-                : record.status === "draft"
-                  ? "Inactive"
-                  : record.status === "closed"
-                    ? "Closed"
-                    : textValue(record.status),
-          },
-          { label: "Date Posted", value: (record) => dateValue(record.date_posted) },
-          { label: "Deadline", value: (record) => dateValue(record.deadline) },
-          { label: "Description", value: (record) => textValue(record.description) },
-          { label: "Job Qualifications", value: (record) => textValue(record.job_qualifications) },
-          { label: "Requirements", value: (record) => textValue(record.requirements) },
-        ]
-      : page === "Employers"
-        ? [
-            { label: "Company / Employer", value: (record) => textValue(record.name) },
-            { label: "Contact Person", value: (record) => textValue(record.contact_person) },
-            { label: "Email", value: (record) => textValue(record.email) },
-            { label: "Contact Number", value: (record) => textValue(record.contact_no) },
-            { label: "Address", value: (record) => textValue(record.address) },
-            {
-              label: "Documents",
-              value: (record) =>
-                Array.isArray(record.verification_documents)
-                  ? `${record.verification_documents.length} uploaded`
-                  : "None uploaded",
-            },
-            {
-              label: "Verification",
-              value: (record) =>
-                record.verification_status === "verified"
+  }[] = page === "Employers"
+    ? [
+        { label: "Company / Employer", value: (record) => textValue(record.name) },
+        { label: "Contact Person", value: (record) => textValue(record.contact_person) },
+        { label: "Email", value: (record) => textValue(record.email) },
+        { label: "Contact Number", value: (record) => textValue(record.contact_no) },
+        { label: "Address", value: (record) => textValue(record.address) },
+        {
+          label: "Documents",
+          value: (record) =>
+            Array.isArray(record.verification_documents)
+              ? `${record.verification_documents.length} uploaded`
+              : "None uploaded",
+        },
+        {
+          label: "Verification",
+          value: (record) =>
+            record.verification_status === "verified"
+              ? "Verified"
+              : record.verification_status === "not_approved"
+                ? "Not approved"
+                : record.is_verified === true
                   ? "Verified"
-                  : record.verification_status === "not_approved"
-                    ? "Not approved"
-                    : record.is_verified === true
-                      ? "Verified"
-                      : "Pending",
-            },
-            { label: "Registered", value: (record) => dateValue(record.created_at) },
-          ]
-        : [
-            { label: "Name", value: (record) => textValue(record.full_name) },
-            { label: "Email", value: (record) => textValue(record.email) },
-            { label: "Contact Number", value: (record) => textValue(record.contact_no) },
-            { label: "Address", value: (record) => textValue(record.address) },
-            { label: "Birth Date", value: (record) => dateValue(record.birth_date) },
-            {
-              label: "Resume",
-              value: (record) => record.resume_url ? "Uploaded" : "Not uploaded",
-            },
-            { label: "Registered", value: (record) => dateValue(record.created_at) },
-          ];
+                  : "Pending",
+        },
+        { label: "Registered", value: (record) => dateValue(record.created_at) },
+      ]
+    : [
+        { label: "Name", value: (record) => textValue(record.full_name) },
+        { label: "Email", value: (record) => textValue(record.email) },
+        { label: "Contact Number", value: (record) => textValue(record.contact_no) },
+        { label: "Address", value: (record) => textValue(record.address) },
+        { label: "Birth Date", value: (record) => dateValue(record.birth_date) },
+        {
+          label: "Resume",
+          value: (record) => record.resume_url ? "Uploaded" : "Not uploaded",
+        },
+        { label: "Registered", value: (record) => dateValue(record.created_at) },
+      ];
 
   const filteredRecords = records.filter((record) =>
     columns
@@ -1290,26 +1213,6 @@ function StaffRecordsModule({
                                 ))
                               )}
                             </div>
-                          ) : page === "Job Posts" && column.label === "Employer" ? (
-                            <span className="inline-flex max-w-full items-center gap-2">
-                              <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-50 text-xs font-bold text-blue-700">
-                                {typeof record.employer_logo_url === "string" &&
-                                record.employer_logo_url ? (
-                                  <img
-                                    src={record.employer_logo_url}
-                                    alt=""
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  textValue(record.employer_name, "E")
-                                    .charAt(0)
-                                    .toUpperCase()
-                                )}
-                              </span>
-                              <span className="truncate">
-                                {column.value(record)}
-                              </span>
-                            </span>
                           ) : (
                             column.value(record)
                           )

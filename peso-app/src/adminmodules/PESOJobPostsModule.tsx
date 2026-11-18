@@ -49,7 +49,7 @@ export default function PESOJobPostsModule() {
 
     if (!pesoEmployer) {
       setLoadError(
-        "The PESO job-posting profile is missing. Apply the latest Supabase migration, then try again.",
+        "The PESO job-posting profile is unavailable. Apply all pending Supabase migrations and confirm you are an active Admin or Staff account with Job Post permission.",
       );
       setLoading(false);
       return;
