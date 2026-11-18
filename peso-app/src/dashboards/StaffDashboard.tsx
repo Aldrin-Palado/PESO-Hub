@@ -1,9 +1,18 @@
-import { useEffect, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type FormEvent,
+} from "react";
 import SidebarToggle from "../components/SidebarToggle";
 import AppIcon, { type AppIconName } from "../components/AppIcon";
 import ModuleIcon from "../components/ModuleIcon";
 import ProfileAvatar from "../components/ProfileAvatar";
 import { supabase } from "../services/supabase";
+import AnalyticsModule from "../adminmodules/AnalyticsModule";
+import { fetchAnalyticsData } from "../services/analyticsData";
 import { openStoredResume } from "../services/resumes";
 import ApplicationsModule from "../adminmodules/ApplicationsModule";
 import type { ApplicationDecisionResult } from "../services/applicationDecisions";
@@ -51,6 +60,11 @@ type ModuleName =
 
 type StaffRecordPage = "Employers" | "Job Seekers";
 type StaffRecord = Record<string, unknown>;
+type AnalyticsModuleProps = ComponentProps<typeof AnalyticsModule>;
+type StaffAnalyticsData = Pick<
+  AnalyticsModuleProps,
+  "counts" | "applications" | "jobPosts" | "employers" | "jobSeekers"
+>;
 
 type StaffApplication = {
   application_id: string;
@@ -497,7 +511,7 @@ export default function StaffDashboard() {
         );
 
       case "Analytics":
-        return <Analytics />;
+        return <Analytics userId={staff.user_id} />;
 
       case "Job Posts":
         return <PESOJobPostsModule />;
@@ -905,32 +919,174 @@ function DashboardOverview({
    ANALYTICS
 ========================================================= */
 
-function Analytics() {
+function Analytics({ userId }: { userId: string }) {
+  const [data, setData] = useState<StaffAnalyticsData>({
+    counts: { jobs: 0, applications: 0, employers: 0, jobSeekers: 0 },
+    applications: [],
+    jobPosts: [],
+    employers: [],
+    jobSeekers: [],
+  });
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [realtimeUnavailable, setRealtimeUnavailable] = useState(false);
+  const requestVersion = useRef(0);
+
+  const loadAnalyticsData = useCallback(async (showLoading = true) => {
+    const currentRequest = ++requestVersion.current;
+    if (showLoading) setLoading(true);
+    setLoadError("");
+
+    try {
+      const analyticsData = await fetchAnalyticsData();
+      if (currentRequest !== requestVersion.current) return;
+
+      setData({
+        counts: {
+          jobs: analyticsData.jobPosts.length,
+          applications: analyticsData.applications.length,
+          employers: analyticsData.employers.length,
+          jobSeekers: analyticsData.jobSeekers.length,
+        },
+        applications: analyticsData.applications as AnalyticsModuleProps["applications"],
+        jobPosts: analyticsData.jobPosts as AnalyticsModuleProps["jobPosts"],
+        employers: analyticsData.employers as AnalyticsModuleProps["employers"],
+        jobSeekers: analyticsData.jobSeekers as AnalyticsModuleProps["jobSeekers"],
+      });
+    } catch (error) {
+      if (currentRequest !== requestVersion.current) return;
+      console.error("Staff analytics loading error:", error);
+      setLoadError(
+        error instanceof Error ? error.message : "Unable to load analytics data.",
+      );
+    } finally {
+      if (currentRequest === requestVersion.current) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let fallbackPoll: ReturnType<typeof setInterval> | null = null;
+    const scheduleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        void loadAnalyticsData(false);
+      }, 150);
+    };
+    const channel = supabase
+      .channel(`staff-analytics-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "job_seeker" },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "application" },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "employer" },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "job_vacancy" },
+        scheduleRefresh,
+      )
+      .subscribe((status, subscriptionError) => {
+        if (!active) return;
+        if (status === "SUBSCRIBED") {
+          if (fallbackPoll) {
+            clearInterval(fallbackPoll);
+            fallbackPoll = null;
+          }
+          setRealtimeUnavailable(false);
+          void loadAnalyticsData(false);
+        } else if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED"
+        ) {
+          console.error("Staff analytics realtime subscription failed:", {
+            status,
+            error: subscriptionError,
+          });
+          setRealtimeUnavailable(true);
+          if (!fallbackPoll) {
+            fallbackPoll = setInterval(() => {
+              void loadAnalyticsData(false);
+            }, 30000);
+          }
+        }
+      });
+
+    void loadAnalyticsData();
+    return () => {
+      active = false;
+      requestVersion.current++;
+      if (refreshTimer) clearTimeout(refreshTimer);
+      if (fallbackPoll) clearInterval(fallbackPoll);
+      void supabase.removeChannel(channel);
+    };
+  }, [loadAnalyticsData, userId]);
 
   return (
-    <div>
+    <AnalyticsModule
+      {...data}
+      loading={loading}
+      loadError={loadError}
+      realtimeUnavailable={realtimeUnavailable}
+      StatCard={StaffAnalyticsStatCard}
+      AnalyticsCard={StaffAnalyticsCard}
+      SummaryRow={StaffAnalyticsSummaryRow}
+    />
+  );
+}
 
-      <h2 className="text-2xl font-black text-[#123B70]">
-        Analytics
-      </h2>
+function StaffAnalyticsStatCard({
+  title,
+  value,
+}: {
+  title: string;
+  value: number;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <p className="text-sm font-medium text-slate-500">{title}</p>
+      <p className="mt-3 text-3xl font-bold text-blue-900">{value}</p>
+    </div>
+  );
+}
 
-      <p className="mt-2 text-slate-500">
-        Employment statistics and reports.
-      </p>
+function StaffAnalyticsCard({
+  title,
+  value,
+}: {
+  title: string;
+  value: number;
+}) {
+  return (
+    <div className="rounded-lg bg-slate-50 p-5">
+      <p className="text-sm text-slate-500">{title}</p>
+      <p className="mt-2 text-2xl font-bold text-blue-900">{value}</p>
+    </div>
+  );
+}
 
-      <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-8">
-
-        <p className="font-bold text-slate-700">
-          Analytics Module
-        </p>
-
-        <p className="mt-2 text-sm text-slate-500">
-          Employment data and system statistics
-          will appear here.
-        </p>
-
-      </div>
-
+function StaffAnalyticsSummaryRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+      <span className="text-sm text-slate-600">{label}</span>
+      <span className="font-bold text-slate-800">{value}</span>
     </div>
   );
 }

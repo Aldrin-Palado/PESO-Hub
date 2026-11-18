@@ -14,6 +14,7 @@ import {
   Pie,
 } from "recharts";
 import ExportFormatControl from "../components/ExportFormatControl";
+import type { ExportRow } from "../services/dataExport";
 import { isJobSeekerProfileComplete } from "../services/jobSeekerProfile";
 
 type JobPost = {
@@ -822,6 +823,10 @@ jobPosts.forEach((job) => {
     (applicationDateRange
       ? isFullMonthDateRange(applicationDateRange)
       : !selectedMonthIsCurrent);
+  const selectedMonthDifference =
+    canCompareSelectedMonth && selectedMonth && previousMonth
+      ? selectedMonth.value - previousMonth.value
+      : null;
 
   const monthlyTrendInsight = (() => {
     if (!selectedMonth) return "";
@@ -996,6 +1001,120 @@ jobPosts.forEach((job) => {
     },
   ];
 
+  const descriptiveExportRows: ExportRow[] = (() => {
+    const rows: ExportRow[] = [
+      {
+        Dataset: "Report scope",
+        Metric: applicationDateRange
+          ? `${applicationDateRange.start} to ${applicationDateRange.end}`
+          : "All available application records",
+        Count: "",
+        "Share (%)": "",
+        Finding:
+          "Application data follows the applied date range. Profile demographics and current job-post statuses are unfiltered snapshots.",
+        "Recommended action": "",
+      },
+    ];
+    [
+      ["Applications", totalApplications],
+      ["Job posts", totalJobPosts],
+      ["Employers", employers.length],
+      ["Job seekers", jobSeekers.length],
+    ].forEach(([metric, count]) => {
+      rows.push({
+        Dataset: "Summary totals",
+        Metric: metric,
+        Count: count,
+        "Share (%)": "",
+        Finding: "",
+        "Recommended action": "",
+      });
+    });
+    const appendBreakdown = (
+      dataset: string,
+      items: { label: string; value: number; percentage?: number }[],
+      denominator: number,
+    ) => {
+      items.forEach((item) => {
+        rows.push({
+          Dataset: dataset,
+          Metric: item.label,
+          Count: item.value,
+          "Share (%)": (
+            item.percentage ??
+            (denominator ? (item.value / denominator) * 100 : 0)
+          ).toFixed(1),
+          Finding: "",
+          "Recommended action": "",
+        });
+      });
+    };
+
+    appendBreakdown(
+      "Monthly applications",
+      analyticsData.monthlyApplications,
+      applicationPeriodTotal,
+    );
+    appendBreakdown(
+      "Applications by job title",
+      analyticsData.allJobTitles,
+      totalApplications,
+    );
+    appendBreakdown(
+      "Applications by employer",
+      analyticsData.allCompanies,
+      totalApplications,
+    );
+    appendBreakdown(
+      "Job-seeker gender",
+      genderBreakdown,
+      genderBreakdown.reduce((total, item) => total + item.value, 0),
+    );
+    appendBreakdown(
+      "4Ps response",
+      fourPsBreakdown,
+      fourPsRespondentCount,
+    );
+    appendBreakdown(
+      "Disability category",
+      disabilityBreakdown,
+      disabilityBreakdown.reduce((total, item) => total + item.value, 0),
+    );
+    appendBreakdown(
+      "Verified job-seeker unemployment reason",
+      graduateTracking.reasonBreakdown,
+      reasonProfileCount,
+    );
+    appendBreakdown(
+      "Fresh-graduate application outcome",
+      graduateTracking.freshGraduateOutcomeSummary,
+      graduateTracking.freshGraduateCount,
+    );
+    appendBreakdown(
+      "Application status",
+      analyticsData.statusBreakdown,
+      totalApplications,
+    );
+    appendBreakdown(
+      "Current job-post status",
+      analyticsData.jobPostStatusBreakdown,
+      totalJobPosts,
+    );
+
+    overviewInsights.forEach((insight) => {
+      rows.push({
+        Dataset: "Insights and recommendations",
+        Metric: insight.title,
+        Count: "",
+        "Share (%)": "",
+        Finding: insight.finding,
+        "Recommended action": insight.recommendation,
+      });
+    });
+
+    return rows;
+  })();
+
   const activeSelectedInsight = (() => {
     if (!selectedInsight) return null;
 
@@ -1029,12 +1148,16 @@ jobPosts.forEach((job) => {
             }`,
             recommendation:
               activeSelectedInsight.value === 0
-                ? "Check whether suitable vacancies were open and visible during this month, then compare activity after the next posting cycle."
-                : applicationTrendDifference < 0 &&
-                    selectedMonthIndex ===
-                      analyticsData.monthlyApplications.length - 1
-                  ? "Review open-vacancy count and posting visibility to understand the recent decline."
-                  : "Use this month's volume to plan employer follow-up and compare demand with the adjacent months.",
+                ? `Review whether suitable vacancies were open and visible in ${activeSelectedInsight.label}, then check application activity after the next posting cycle.`
+                : selectedMonthDifference !== null &&
+                    selectedMonthDifference < 0
+                  ? `Review vacancy availability and posting visibility after applications fell by ${Math.abs(selectedMonthDifference).toLocaleString()} from ${previousMonth?.label}.`
+                  : selectedMonthDifference !== null &&
+                      selectedMonthDifference > 0
+                    ? `Plan employer follow-up for the ${selectedMonthDifference.toLocaleString()} additional applications compared with ${previousMonth?.label}.`
+                    : selectedMonthIsCurrent
+                      ? "Treat this figure as month-to-date; compare it with a completed month or apply a full-month date range before drawing a trend conclusion."
+                      : "Use this month's count to plan employer follow-up and compare demand with the adjacent months.",
           }
         : activeSelectedInsight.category === "job title"
           ? {
@@ -1356,7 +1479,8 @@ jobPosts.forEach((job) => {
       {/* DESCRIPTIVE ANALYTICS */}
 
       <section aria-labelledby="descriptive-analytics-title" className="space-y-5">
-        <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
           <h2
             id="descriptive-analytics-title"
             className="text-xl font-bold text-slate-800"
@@ -1364,8 +1488,26 @@ jobPosts.forEach((job) => {
             Descriptive Analytics
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Explore application trends, job-seeker profiles, and graduate outcomes. Select a chart bar for a focused finding and recommended action.
+            Counts show the records in each chart; profile and current job-post charts are snapshots. Select a bar for its finding and next step.
           </p>
+          </div>
+          <ExportFormatControl
+            filename={`descriptive-analytics-report-${
+              applicationDateRange
+                ? `${applicationDateRange.start}-to-${applicationDateRange.end}`
+                : "all-data"
+            }`}
+            columns={[
+              "Dataset",
+              "Metric",
+              "Count",
+              "Share (%)",
+              "Finding",
+              "Recommended action",
+            ]}
+            rows={loading || loadError ? [] : descriptiveExportRows}
+            buttonLabel="Export analytics report"
+          />
         </div>
 
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -1399,8 +1541,8 @@ jobPosts.forEach((job) => {
                   margin={{
                     top: 20,
                     right: 12,
-                    left: -15,
-                    bottom: 5,
+                    left: 5,
+                    bottom: 20,
                   }}
                 >
 
@@ -1415,6 +1557,7 @@ jobPosts.forEach((job) => {
                     tickLine={false}
                     axisLine={false}
                     tick={{ fill: "#64748B", fontSize: 12 }}
+                    label={{ value: "Month", position: "insideBottom", offset: -10 }}
                   />
 
                   <YAxis
@@ -1422,6 +1565,7 @@ jobPosts.forEach((job) => {
                     tickLine={false}
                     axisLine={false}
                     tick={{ fill: "#64748B", fontSize: 12 }}
+                    label={{ value: "Applications", angle: -90, position: "insideLeft" }}
                   />
 
                   <Tooltip
@@ -1507,7 +1651,7 @@ jobPosts.forEach((job) => {
                     margin={{
                       top: 5,
                       right: 30,
-                      left: 5,
+                      left: 12,
                       bottom: 5,
                     }}
                   >
@@ -1524,16 +1668,18 @@ jobPosts.forEach((job) => {
                       tickLine={false}
                       axisLine={false}
                       tick={{ fill: "#64748B", fontSize: 11 }}
+                      label={{ value: "Applications", position: "insideBottom", offset: -2 }}
                     />
 
                     <YAxis
                       type="category"
                       dataKey="label"
-                      width={105}
+                      width={145}
                       interval={0}
                       tickLine={false}
                       axisLine={false}
                       tick={{ fill: "#475569", fontSize: 11 }}
+                      label={{ value: "Job title", angle: -90, position: "insideLeft" }}
                     />
 
                     <Tooltip
@@ -1619,7 +1765,7 @@ jobPosts.forEach((job) => {
                     margin={{
                       top: 5,
                       right: 30,
-                      left: 5,
+                      left: 12,
                       bottom: 5,
                     }}
                   >
@@ -1636,16 +1782,18 @@ jobPosts.forEach((job) => {
                       tickLine={false}
                       axisLine={false}
                       tick={{ fill: "#64748B", fontSize: 11 }}
+                      label={{ value: "Applications", position: "insideBottom", offset: -2 }}
                     />
 
                     <YAxis
                       type="category"
                       dataKey="label"
-                      width={105}
+                      width={145}
                       interval={0}
                       tickLine={false}
                       axisLine={false}
                       tick={{ fill: "#475569", fontSize: 11 }}
+                      label={{ value: "Employer", angle: -90, position: "insideLeft" }}
                     />
 
                     <Tooltip
@@ -1867,11 +2015,12 @@ jobPosts.forEach((job) => {
                       tickLine={false}
                       axisLine={false}
                       tick={{ fill: "#64748B", fontSize: 11 }}
+                      label={{ value: "Job seekers", position: "insideBottom", offset: -2 }}
                     />
                     <YAxis
                       type="category"
                       dataKey="label"
-                      width={105}
+                      width={125}
                       interval={0}
                       tickLine={false}
                       axisLine={false}
@@ -1941,6 +2090,7 @@ jobPosts.forEach((job) => {
                       tickLine={false}
                       axisLine={false}
                       tick={{ fill: "#64748B", fontSize: 11 }}
+                      label={{ value: "Verified job seekers", position: "insideBottom", offset: -2 }}
                     />
                     <YAxis
                       type="category"
@@ -2102,12 +2252,13 @@ jobPosts.forEach((job) => {
                       tickLine={false}
                       axisLine={false}
                       tick={{ fill: "#64748B", fontSize: 11 }}
+                      label={{ value: "Applications", position: "insideBottom", offset: -2 }}
                     />
 
                     <YAxis
                       type="category"
                       dataKey="label"
-                      width={105}
+                      width={125}
                       interval={0}
                       tickLine={false}
                       axisLine={false}
@@ -2214,12 +2365,13 @@ jobPosts.forEach((job) => {
                       tickLine={false}
                       axisLine={false}
                       tick={{ fill: "#64748B", fontSize: 11 }}
+                      label={{ value: "Job posts", position: "insideBottom", offset: -2 }}
                     />
 
                     <YAxis
                       type="category"
                       dataKey="label"
-                      width={105}
+                      width={125}
                       interval={0}
                       tickLine={false}
                       axisLine={false}

@@ -40,6 +40,7 @@ import {
 } from "../services/applicationDecisions";
 import { getEmployerRegistrationChecklist } from "../services/employerRegistration";
 import { isJobSeekerProfileComplete } from "../services/jobSeekerProfile";
+import { fetchAnalyticsData } from "../services/analyticsData";
 import { useUnreadMessages } from "../services/useUnreadMessages";
 import {
   parseJobPostEmployerSummaries,
@@ -1052,167 +1053,20 @@ export default function AdminDashboard() {
   setAnalyticsError("");
 
   try {
-    const [
-      applicationsResult,
-      jobsResult,
-      employersResult,
-      seekersResult,
-    ] = await Promise.all([
-
-(async () => {
-  const pageSize = 1000;
-  const allApplications: unknown[] = [];
-  let from = 0;
-
-  while (true) {
-    const { data, error } = await supabase
-      .from("application")
-      .select(
-        "application_id, employer_id, job_seeker_id, position_title, status, date_applied, applicant_name, applicant_contact_no, job_seeker(job_seeker_id, full_name, birth_date, contact_no, registration_details), application_status_history(status, changed_at, is_backfill)"
-      )
-      .order("application_id", { ascending: true })
-      .range(from, from + pageSize - 1);
-
-    if (error) {
-      return { data: null, error };
-    }
-
-    const page = data ?? [];
-    allApplications.push(...page);
-
-    if (page.length === 0) {
-      break;
-    }
-
-    from += page.length;
-  }
-
-  return { data: allApplications, error: null };
-})(),
-
-
-
-(async () => {
-  const pageSize = 1000;
-  const allJobs: unknown[] = [];
-  let from = 0;
-
-  while (true) {
-    const { data, error } = await supabase
-      .from("job_vacancy")
-      .select(
-        "job_vacancy_id, employer_id, position_title, status, date_posted, created_at"
-      )
-      .order("job_vacancy_id", { ascending: true })
-      .range(from, from + pageSize - 1);
-
-    if (error) {
-      return { data: null, error };
-    }
-
-    const page = data ?? [];
-    allJobs.push(...page);
-
-    if (page.length === 0) {
-      break;
-    }
-
-    from += page.length;
-  }
-
-  return { data: allJobs, error: null };
-})(),
-
-
-      (async () => {
-  const pageSize = 1000;
-  const allEmployers: unknown[] = [];
-  let from = 0;
-
-  while (true) {
-    const { data, error } = await supabase
-      .from("employer")
-      .select("employer_id, name, created_at")
-      .order("employer_id", { ascending: true })
-      .range(from, from + pageSize - 1);
-
-    if (error) {
-      return { data: null, error };
-    }
-
-    const page = data ?? [];
-    allEmployers.push(...page);
-
-    if (page.length === 0) {
-      break;
-    }
-
-    from += page.length;
-  }
-
-  return { data: allEmployers, error: null };
-})(),
-
-      (async () => {
-  const pageSize = 1000;
-  const allSeekers: unknown[] = [];
-  let from = 0;
-
-  while (true) {
-    const { data, error } = await supabase
-      .from("job_seeker")
-    .select(
-      "job_seeker_id, full_name, email, verification_status, registration_details, resume_url, created_at",
-    )
-      .order("job_seeker_id", { ascending: true })
-      .range(from, from + pageSize - 1);
-
-    if (error) {
-      return { data: null, error };
-    }
-
-    const page = data ?? [];
-    allSeekers.push(...page);
-
-    if (page.length === 0) {
-      break;
-    }
-
-    from += page.length;
-  }
-
-  return { data: allSeekers, error: null };
-})(),
-    ]);
-
-    const errors = [
-      applicationsResult.error?.message,
-      jobsResult.error?.message,
-      employersResult.error?.message,
-      seekersResult.error?.message,
-    ].filter(Boolean);
-
-    if (errors.length > 0) {
-      throw new Error(errors.join(" | "));
-    }
+    const analyticsData = await fetchAnalyticsData();
 
     if (requestVersion !== analyticsRequestVersion.current) return;
 
-    const applicationData = applicationsResult.data ?? [];
-    const jobData = jobsResult.data ?? [];
-    const employerData = employersResult.data ?? [];
-    const seekerData = seekersResult.data ?? [];
-
-    setApplications(applicationData as Application[]);
-    setJobPosts(jobData as JobPost[]);
-    setEmployers(employerData as Employer[]);
-    setJobSeekers(seekerData as JobSeeker[]);
+    setApplications(analyticsData.applications as Application[]);
+    setJobPosts(analyticsData.jobPosts as JobPost[]);
+    setEmployers(analyticsData.employers as Employer[]);
+    setJobSeekers(analyticsData.jobSeekers as JobSeeker[]);
 
     setCounts({
-      jobs: jobData.length,
-      applications: applicationData.length,
-      employers: employerData.length,
-      jobSeekers: seekerData.length,
+      jobs: analyticsData.jobPosts.length,
+      applications: analyticsData.applications.length,
+      employers: analyticsData.employers.length,
+      jobSeekers: analyticsData.jobSeekers.length,
     });
 
   } catch (error) {
