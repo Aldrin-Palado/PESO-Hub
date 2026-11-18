@@ -1027,7 +1027,7 @@ export default function MyJobPostModule({
         </div>
 
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
-          <label className="relative w-full sm:w-64">
+          <label className="relative w-full sm:w-56">
             <span className="sr-only">Search job posts</span>
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
               <AppIcon name="search" className="h-4 w-4" />
@@ -1040,6 +1040,14 @@ export default function MyJobPostModule({
               className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             />
           </label>
+          <div className="w-full sm:w-56">
+            <JobPostArchiveTabs
+              value={jobPostSection}
+              onChange={setJobPostSection}
+              activeCount={jobs.filter((job) => !isJobPostArchived(job)).length}
+              archivedCount={jobs.filter(isJobPostArchived).length}
+            />
+          </div>
           <button
             type="button"
             onClick={openCreateForm}
@@ -1060,13 +1068,6 @@ export default function MyJobPostModule({
           {message}
         </div>
       )}
-
-      <JobPostArchiveTabs
-        value={jobPostSection}
-        onChange={setJobPostSection}
-        activeCount={jobs.filter((job) => !isJobPostArchived(job)).length}
-        archivedCount={jobs.filter(isJobPostArchived).length}
-      />
 
       {/* CREATE FORM */}
 
