@@ -706,39 +706,26 @@ export default function StaffDashboard() {
 
           </div>
 
-          {/* ACCOUNT */}
+        </nav>
 
-          <p className="mb-3 mt-8 px-3 text-xs font-bold uppercase tracking-wider text-blue-200">
-            Account
-          </p>
+        {/* ACCOUNT ACTIONS */}
+
+        <div className="mt-auto border-t border-blue-400/30 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
 
           <button
             type="button"
-            onClick={() =>
-              go("My Profile")
-            }
-            className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold transition ${
+            onClick={() => go("My Profile")}
+            className={`mb-1 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold transition ${
               activePage === "My Profile"
                 ? "bg-white text-[#0446A7]"
                 : "text-white hover:bg-blue-600"
             }`}
           >
-
             <span className="flex w-6 justify-center" aria-hidden="true">
               <ModuleIcon module="My Profile" />
             </span>
-
-            <span>
-              My Profile
-            </span>
-
+            <span>My Profile</span>
           </button>
-
-        </nav>
-
-        {/* LOGOUT */}
-
-        <div className="mt-auto border-t border-blue-400/30 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
 
           <button
             type="button"

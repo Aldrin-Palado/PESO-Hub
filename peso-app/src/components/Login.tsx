@@ -97,6 +97,7 @@ function Login() {
 
     let active = true;
     let resizeObserver: ResizeObserver | null = null;
+    let lastRenderedWidth = 0;
     let script = document.querySelector<HTMLScriptElement>(
       `script[src="${googleIdentityScriptUrl}"]`,
     );
@@ -115,6 +116,12 @@ function Login() {
 
       const buttonWidth = Math.min(400, availableWidth);
 
+      // Avoid clearing and recreating the Google button when its width is unchanged.
+      if (buttonWidth === lastRenderedWidth && container.childElementCount > 0) {
+        return;
+      }
+
+      lastRenderedWidth = buttonWidth;
       container.innerHTML = "";
 
       window.google.accounts.id.renderButton(container, {
@@ -193,7 +200,7 @@ function Login() {
         script.removeEventListener("error", handleScriptError);
       }
     };
-  }, []);
+  }, [authStep]);
 
   useEffect(() => {
     if (!showGoogleRegistrationModal) return;
@@ -971,7 +978,15 @@ function Login() {
               </button>
               <button
                 type="button"
-                onClick={() => setShowGoogleRegistrationModal(false)}
+                onClick={() => {
+                  setShowGoogleRegistrationModal(false);
+                  setAuthStep("credentials");
+                  setAuthMethod("password");
+                  setError("");
+                  setGoogleButtonError("");
+                  googleIdTokenRef.current = "";
+                  resetCaptcha();
+                }}
                 className="w-full rounded-xl border border-[#D5DEEB] bg-white px-5 py-3.5 text-sm font-semibold text-[#3156A2] transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315FEA]"
               >
                 Back to sign in

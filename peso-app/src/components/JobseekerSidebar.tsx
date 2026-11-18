@@ -32,8 +32,6 @@ const menuItems: { label: JobSeekerPage }[] = [
   { label: "AI Assistant" },
 ];
 
-const accountItems: { label: JobSeekerPage }[] = [{ label: "Profile" }];
-
 export default function JobSeekerSidebar({
   activePage,
   setActivePage,
@@ -133,41 +131,28 @@ export default function JobSeekerSidebar({
             })}
           </nav>
 
-          <p className="mb-3 mt-8 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
-            Account
-          </p>
-
-          <nav className="space-y-1">
-            {accountItems.map((item) => {
-              const active = activePage === item.label;
-
-              return (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={() => {
-                    setActivePage(item.label);
-                    onClose();
-                  }}
-                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition ${
-                    active
-                      ? "bg-blue-700 text-white shadow-sm"
-                      : "text-gray-600 hover:bg-blue-50 hover:text-blue-700"
-                  }`}
-                >
-                  <span className="flex w-5 justify-center" aria-hidden="true">
-                    <ModuleIcon module={item.label} />
-                  </span>
-
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
         </div>
 
-        {/* Logout */}
+        {/* Account actions */}
         <div className="border-t border-blue-100 p-4">
+          <button
+            type="button"
+            onClick={() => {
+              setActivePage("Profile");
+              onClose();
+            }}
+            className={`mb-1 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition ${
+              activePage === "Profile"
+                ? "bg-blue-700 text-white shadow-sm"
+                : "text-gray-600 hover:bg-blue-50 hover:text-blue-700"
+            }`}
+          >
+            <span className="flex w-5 justify-center" aria-hidden="true">
+              <ModuleIcon module="Profile" />
+            </span>
+            <span>Profile</span>
+          </button>
+
           <button
             type="button"
             onClick={() => {
