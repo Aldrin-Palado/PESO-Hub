@@ -96,17 +96,19 @@ function JobPostActionsMenu({
     <details ref={menuRef} className="relative inline-block text-left">
       <summary
         aria-label="Job post actions"
-        className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 hover:text-[#0759AE] focus:outline-none focus:ring-2 focus:ring-blue-500 [&::-webkit-details-marker]:hidden"
+        className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-[#0759AE] focus:outline-none focus:ring-2 focus:ring-blue-500 [&::-webkit-details-marker]:hidden"
       >
         <svg
           aria-hidden="true"
           viewBox="0 0 24 24"
-          fill="currentColor"
-          className="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-4 w-4"
         >
-          <circle cx="5" cy="12" r="1.75" />
-          <circle cx="12" cy="12" r="1.75" />
-          <circle cx="19" cy="12" r="1.75" />
+          <path d="m6 9 6 6 6-6" />
         </svg>
       </summary>
       <div className="absolute right-0 top-full z-30 mt-1 min-w-32 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
