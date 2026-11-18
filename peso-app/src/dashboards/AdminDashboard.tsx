@@ -1177,8 +1177,8 @@ export default function AdminDashboard() {
      JOB POSTS
   ============================================================ */
 
-  const loadJobPosts = async () => {
-    setModuleLoading(true);
+  const loadJobPosts = useCallback(async (showLoading = true) => {
+    if (showLoading) setModuleLoading(true);
     setModuleError("");
 
     try {
@@ -1232,9 +1232,66 @@ export default function AdminDashboard() {
           : "Job posts could not be loaded.",
       );
     } finally {
-      setModuleLoading(false);
+      if (showLoading) setModuleLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!account || activePage !== "Job Post") return;
+
+    let active = true;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let fallbackPoll: ReturnType<typeof setInterval> | null = null;
+    const scheduleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        void loadJobPosts(false);
+      }, 150);
+    };
+    const channel = supabase
+      .channel(`admin-job-posts-${account.user_id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "job_vacancy",
+        },
+        scheduleRefresh,
+      )
+      .subscribe((status, subscriptionError) => {
+        if (!active) return;
+
+        if (status === "SUBSCRIBED") {
+          if (fallbackPoll) {
+            clearInterval(fallbackPoll);
+            fallbackPoll = null;
+          }
+          void loadJobPosts(false);
+        } else if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED"
+        ) {
+          console.error("Admin job-post realtime subscription failed:", {
+            status,
+            error: subscriptionError,
+          });
+          if (!fallbackPoll) {
+            fallbackPoll = setInterval(() => {
+              void loadJobPosts(false);
+            }, 5000);
+          }
+        }
+      });
+
+    return () => {
+      active = false;
+      if (refreshTimer) clearTimeout(refreshTimer);
+      if (fallbackPoll) clearInterval(fallbackPoll);
+      void supabase.removeChannel(channel);
+    };
+  }, [account, activePage, loadJobPosts]);
 
   /* ============================================================
      EMPLOYERS
