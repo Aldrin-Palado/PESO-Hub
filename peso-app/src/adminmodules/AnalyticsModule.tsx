@@ -913,6 +913,9 @@ jobPosts.forEach((job) => {
     latestMonth && latestMonthPrevious
       ? latestMonth.value - latestMonthPrevious.value
       : 0;
+  const hasApplicationStatusData = analyticsData.statusBreakdown.some(
+    (status) => status.value > 0,
+  );
 
   const overviewInsights: ActionableInsight[] = [
     {
@@ -2203,7 +2206,7 @@ jobPosts.forEach((job) => {
 
           {/* APPLICATION STATUS BREAKDOWN */}
 
-          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-3">
+          <div className="flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-3">
 
             <div className="mb-5">
               <h3 className="text-lg font-bold text-slate-800">
@@ -2215,14 +2218,34 @@ jobPosts.forEach((job) => {
               </p>
             </div>
 
-            {analyticsData.statusBreakdown.every(
-              (status) => status.value === 0
-            ) ? (
-
-              <p className="py-8 text-center text-sm text-slate-500">
-                No application status data available yet.
-              </p>
-
+            {!hasApplicationStatusData ? (
+              <div
+                aria-live="polite"
+                className="flex min-h-[220px] flex-1 flex-col items-center justify-center px-4 py-8 text-center"
+              >
+                <svg
+                  aria-hidden="true"
+                  className="h-10 w-10 text-slate-300"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M4 19V5m0 14h16M8 15v-4m4 4V7m4 8v-6"
+                  />
+                </svg>
+                <p className="mt-3 text-sm font-semibold text-slate-700">
+                  No applications found for this view
+                </p>
+                <p className="mt-1 max-w-xs text-sm leading-relaxed text-slate-500">
+                  {applicationDateRange
+                    ? "Adjust or clear the applied date range to check other applications."
+                    : "Application status counts will appear here after applications are submitted."}
+                </p>
+              </div>
             ) : (
 
               <div className="h-[220px] w-full">
@@ -2310,9 +2333,11 @@ jobPosts.forEach((job) => {
 
             )}
 
-            <p className="mt-3 text-xs text-slate-500">
-              Select a status to view its insights.
-            </p>
+            {hasApplicationStatusData && (
+              <p className="mt-3 text-xs text-slate-500">
+                Select a status to view its insights.
+              </p>
+            )}
 
           </div>
 
@@ -2436,10 +2461,7 @@ jobPosts.forEach((job) => {
         <aside className="h-fit rounded-xl border border-slate-200 bg-white p-5 shadow-sm xl:sticky xl:top-6">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
-                Descriptive Analytics
-              </p>
-              <h3 className="mt-2 text-xl font-bold text-slate-800">
+              <h3 className="text-xl font-bold text-slate-800">
                 {activeSelectedInsight
                   ? activeSelectedInsight.label
                   : "Insights & Recommendations"}
