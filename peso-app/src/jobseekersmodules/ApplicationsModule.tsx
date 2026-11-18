@@ -331,7 +331,7 @@ export default function ApplicationsModule({
               {filtered.length} record{filtered.length === 1 ? "" : "s"}
             </span>
           </div>
-          <div className="w-full sm:max-w-[36rem]">
+          <div className="w-full sm:max-w-xs">
             <ApplicationArchiveTabs
               value={applicationSection}
               onChange={setApplicationSection}
