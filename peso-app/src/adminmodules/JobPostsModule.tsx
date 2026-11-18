@@ -1,4 +1,5 @@
-import { useRef, useState, type ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
+import { createPortal } from "react-dom";
 import AppIcon from "../components/AppIcon";
 import FilterDropdown from "../components/FilterDropdown";
 import ModuleScoreboard from "../components/ModuleScoreboard";
@@ -57,6 +58,11 @@ type Props = {
   formatDate: (date?: string) => string;
 };
 
+type ActionsPosition = {
+  top: number;
+  left: number;
+};
+
 function getJobTitle(job: JobPost): string {
   return (
     job.position_title ||
@@ -85,48 +91,6 @@ function getSalaryRange(job: JobPost): string {
   return `${job.salary_min ?? "-"} – ${job.salary_max ?? "-"} per ${period}`;
 }
 
-function JobPostActionsMenu({
-  onView,
-}: {
-  onView: () => void;
-}) {
-  const menuRef = useRef<HTMLDetailsElement>(null);
-
-  return (
-    <details ref={menuRef} className="relative inline-block text-left">
-      <summary
-        aria-label="Job post actions"
-        className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-[#0759AE] focus:outline-none focus:ring-2 focus:ring-blue-500 [&::-webkit-details-marker]:hidden"
-      >
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="h-4 w-4"
-        >
-          <path d="m6 9 6 6 6-6" />
-        </svg>
-      </summary>
-      <div className="absolute right-0 top-full z-30 mt-1 min-w-32 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
-        <button
-          type="button"
-          onClick={() => {
-            menuRef.current?.removeAttribute("open");
-            onView();
-          }}
-          className="w-full rounded-md px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-[#0759AE]"
-        >
-          View
-        </button>
-      </div>
-    </details>
-  );
-}
-
 export default function JobPostsModule({
   jobs,
   loadError,
@@ -143,8 +107,27 @@ export default function JobPostsModule({
   const [jobPostSection, setJobPostSection] =
     useState<"active" | "archived">("active");
   const [selectedJob, setSelectedJob] = useState<JobPost | null>(null);
+  const [openActionsJobId, setOpenActionsJobId] = useState<string | null>(null);
+  const [actionsPosition, setActionsPosition] =
+    useState<ActionsPosition | null>(null);
   const activeCount = jobs.filter((job) => !isJobPostArchived(job)).length;
   const archivedCount = jobs.length - activeCount;
+
+  useEffect(() => {
+    if (!openActionsJobId) return;
+
+    const closeOnViewportChange = () => {
+      setOpenActionsJobId(null);
+      setActionsPosition(null);
+    };
+
+    window.addEventListener("scroll", closeOnViewportChange, true);
+    window.addEventListener("resize", closeOnViewportChange);
+    return () => {
+      window.removeEventListener("scroll", closeOnViewportChange, true);
+      window.removeEventListener("resize", closeOnViewportChange);
+    };
+  }, [openActionsJobId]);
 
   const visibleJobs = jobs.filter((job) => {
     const searchText =
@@ -158,6 +141,74 @@ export default function JobPostsModule({
       (statusFilter === "All" || status === statusFilter.toLowerCase())
     );
   });
+
+  const renderActions = (job: JobPost, rowId: string) => {
+    const isOpen = openActionsJobId === rowId;
+    const closeActions = () => {
+      setOpenActionsJobId(null);
+      setActionsPosition(null);
+    };
+
+    return (
+      <div className="relative inline-block text-left">
+        <button
+          type="button"
+          aria-label={`Show actions for ${getJobTitle(job)}`}
+          aria-expanded={isOpen}
+          onClick={(event) => {
+            if (isOpen) {
+              closeActions();
+              return;
+            }
+
+            const rect = event.currentTarget.getBoundingClientRect();
+            const menuHeight = 56;
+            const menuWidth = 144;
+            const openBelow =
+              window.innerHeight - rect.bottom >= menuHeight + 8;
+            setActionsPosition({
+              top: openBelow
+                ? rect.bottom + 8
+                : Math.max(8, rect.top - menuHeight - 8),
+              left: Math.min(
+                Math.max(8, window.innerWidth - menuWidth - 8),
+                Math.max(8, rect.right - menuWidth),
+              ),
+            });
+            setOpenActionsJobId(rowId);
+          }}
+          className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-xs text-slate-600 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
+        >
+          <span
+            aria-hidden="true"
+            className={`transition-transform ${isOpen ? "rotate-180" : ""}`}
+          >
+            ▾
+          </span>
+        </button>
+        {isOpen &&
+          actionsPosition &&
+          createPortal(
+            <div
+              className="fixed z-[200] w-36 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg"
+              style={actionsPosition}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  closeActions();
+                  setSelectedJob(job);
+                }}
+                className="block w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                View
+              </button>
+            </div>,
+            document.body,
+          )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-5">
@@ -259,6 +310,7 @@ export default function JobPostsModule({
                 const title = getJobTitle(job);
                 const status = getDisplayStatus(job);
                 const key = job.id || job.job_vacancy_id || index;
+                const rowId = String(job.job_vacancy_id || job.id || index);
 
                 return (
                   <article
@@ -331,9 +383,7 @@ export default function JobPostsModule({
                           </p>
                         </div>
                         <div className="mt-4 flex justify-end">
-                          <JobPostActionsMenu
-                            onView={() => setSelectedJob(job)}
-                          />
+                          {renderActions(job, rowId)}
                         </div>
                       </div>
                     </div>
@@ -367,7 +417,10 @@ export default function JobPostsModule({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {visibleJobs.map((job, index) => (
+                  {visibleJobs.map((job, index) => {
+                    const rowId = String(job.job_vacancy_id || job.id || index);
+
+                    return (
                     <tr
                       key={job.id || job.job_vacancy_id || index}
                       className={`transition-colors hover:bg-blue-50/70 ${
@@ -433,12 +486,11 @@ export default function JobPostsModule({
                         {formatDate(job.date_posted || job.created_at)}
                       </td>
                       <td className="px-3 py-3">
-                        <JobPostActionsMenu
-                          onView={() => setSelectedJob(job)}
-                        />
+                        {renderActions(job, rowId)}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
