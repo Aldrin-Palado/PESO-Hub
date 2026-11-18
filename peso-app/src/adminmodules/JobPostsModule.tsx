@@ -373,9 +373,6 @@ export default function JobPostsModule({
                             </span>
                           </p>
                           <p>
-                            Salary: {getSalaryRange(job)}
-                          </p>
-                          <p>
                             Openings: {job.vacancies_available ?? "-"}
                           </p>
                           <p className="text-slate-500 sm:col-span-2">
@@ -397,14 +394,13 @@ export default function JobPostsModule({
                 <thead className="bg-gradient-to-r from-[#1766B4] to-[#124A91] text-left">
                   <tr>
                     {[
-                      ["Job Title", "w-[18%]"],
-                      ["Employer", "w-[15%]"],
-                      ["Location", "w-[12%]"],
-                      ["Employment Type", "w-[12%]"],
-                      ["Salary Range", "w-[11%]"],
-                      ["Openings", "w-[7%]"],
-                      ["Status", "w-[8%]"],
-                      ["Date Posted", "w-[10%]"],
+                      ["Job Title", "w-[20%]"],
+                      ["Employer", "w-[17%]"],
+                      ["Location", "w-[13%]"],
+                      ["Employment Type", "w-[14%]"],
+                      ["Openings", "w-[8%]"],
+                      ["Status", "w-[9%]"],
+                      ["Date Posted", "w-[12%]"],
                       ["Actions", "w-[7%]"],
                     ].map(([label, width]) => (
                       <th
@@ -473,9 +469,6 @@ export default function JobPostsModule({
                       <td className="truncate px-3 py-3 text-xs text-slate-700">
                         {job.employment_type || "-"}
                       </td>
-                      <td className="truncate px-3 py-3 text-xs text-slate-700">
-                        {getSalaryRange(job)}
-                      </td>
                       <td className="px-3 py-3 text-center text-xs text-slate-700">
                         {job.vacancies_available ?? "-"}
                       </td>
@@ -486,9 +479,7 @@ export default function JobPostsModule({
                         {formatDate(job.date_posted || job.created_at)}
                       </td>
                       <td className="px-3 py-3">
-                        <div className="flex justify-end">
-                          {renderActions(job, rowId)}
-                        </div>
+                        {renderActions(job, rowId)}
                       </td>
                     </tr>
                     );
