@@ -307,7 +307,7 @@ export default function SavedJobsModule({
                           <span className="inline-flex items-center gap-1.5">
                             <AppIcon
                               name="dollar"
-                              className="h-4 w-4 text-amber-500"
+                              className="h-4 w-4 text-slate-500"
                             />
                             {job.salary}
                           </span>

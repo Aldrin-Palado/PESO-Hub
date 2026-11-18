@@ -844,7 +844,7 @@ export default function JobsModule({
                   </p>
                   <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs font-medium text-slate-600">
                     <span className="inline-flex items-center gap-1.5">
-                      <AppIcon name="dollar" className="h-3.5 w-3.5 text-amber-500" />
+                      <AppIcon name="dollar" className="h-3.5 w-3.5 text-slate-500" />
                       {job.salary}
                     </span>
                   </div>
