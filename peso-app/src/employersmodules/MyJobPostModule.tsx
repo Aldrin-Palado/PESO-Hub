@@ -8,6 +8,8 @@ import {
 } from "react";
 import AppIcon from "../components/AppIcon";
 import AutoResizeTextarea from "../components/AutoResizeTextarea";
+import JobPostArchiveTabs from "../components/JobPostArchiveTabs";
+import { isJobPostArchived } from "../utils/jobPostArchive";
 import { supabase } from "../services/supabase";
 import { getEmployerRegistrationChecklist } from "../services/employerRegistration";
 
@@ -33,6 +35,8 @@ type JobPost = {
   status: string;
   date_posted: string;
   deadline: string | null;
+  archive_after?: string | null;
+  archived_at?: string | null;
   image_url?: string | null;
 };
 
@@ -191,6 +195,8 @@ export default function MyJobPostModule({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<JobForm>(emptyForm);
   const [jobSearch, setJobSearch] = useState("");
+  const [jobPostSection, setJobPostSection] =
+    useState<"active" | "archived">("active");
 
   const [selectedImage, setSelectedImage] =
     useState<File | null>(null);
@@ -989,6 +995,11 @@ export default function MyJobPostModule({
   const normalizedJobSearch = jobSearch.trim().toLowerCase();
   const filteredJobPosts = jobs.filter((job) => {
     if (showForm && editingId === job.job_vacancy_id) return true;
+    if (
+      (jobPostSection === "active"
+        ? isJobPostArchived(job)
+        : !isJobPostArchived(job))
+    ) return false;
     if (!normalizedJobSearch) return true;
 
     return [
@@ -1049,6 +1060,13 @@ export default function MyJobPostModule({
           {message}
         </div>
       )}
+
+      <JobPostArchiveTabs
+        value={jobPostSection}
+        onChange={setJobPostSection}
+        activeCount={jobs.filter((job) => !isJobPostArchived(job)).length}
+        archivedCount={jobs.filter(isJobPostArchived).length}
+      />
 
       {/* CREATE FORM */}
 

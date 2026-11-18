@@ -1,7 +1,9 @@
-import type { ComponentType } from "react";
+import { useState, type ComponentType } from "react";
 import AppIcon from "../components/AppIcon";
 import FilterDropdown from "../components/FilterDropdown";
 import ModuleScoreboard from "../components/ModuleScoreboard";
+import JobPostArchiveTabs from "../components/JobPostArchiveTabs";
+import { isJobPostArchived } from "../utils/jobPostArchive";
 
 type JobPost = {
   id?: string;
@@ -24,6 +26,9 @@ type JobPost = {
   description?: string;
   created_at?: string;
   date_posted?: string;
+  deadline?: string | null;
+  archive_after?: string | null;
+  archived_at?: string | null;
   [key: string]: any;
 };
 
@@ -86,11 +91,19 @@ export default function JobPostsModule({
   EmptyMessage,
   formatDate,
 }: Props) {
+  const [jobPostSection, setJobPostSection] =
+    useState<"active" | "archived">("active");
+  const activeCount = jobs.filter((job) => !isJobPostArchived(job)).length;
+  const archivedCount = jobs.length - activeCount;
+
   const visibleJobs = jobs.filter((job) => {
     const searchText =
       `${getJobTitle(job)} ${getEmployerName(job)} ${job.location || ""}`.toLowerCase();
     const status = getDisplayStatus(job).toLowerCase();
     return (
+      (jobPostSection === "active"
+        ? !isJobPostArchived(job)
+        : isJobPostArchived(job)) &&
       searchText.includes(search.toLowerCase()) &&
       (statusFilter === "All" || status === statusFilter.toLowerCase())
     );
@@ -169,9 +182,14 @@ export default function JobPostsModule({
               Vacancy details and employer information
             </p>
           </div>
-          <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-            Showing {visibleJobs.length} of {jobs.length}
-          </span>
+          <div className="w-full sm:max-w-[36rem]">
+            <JobPostArchiveTabs
+              value={jobPostSection}
+              onChange={setJobPostSection}
+              activeCount={activeCount}
+              archivedCount={archivedCount}
+            />
+          </div>
         </div>
 
         {loading ? (
