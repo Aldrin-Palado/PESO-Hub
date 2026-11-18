@@ -6,15 +6,15 @@ UPDATE public.job_vacancy
 SET
   status = CASE
     WHEN deadline IS NOT NULL
-      AND deadline::date < pg_catalog.current_date
+      AND deadline::date < CURRENT_DATE
       AND status = 'open'
     THEN 'closed'
     ELSE status
   END,
   archive_after = CASE
     WHEN deadline IS NOT NULL
-      AND deadline::date < pg_catalog.current_date
-    THEN (deadline::timestamp without time zone + interval '1 month')::timestamptz
+      AND deadline::date < CURRENT_DATE
+    THEN (deadline::date::timestamp without time zone + interval '1 month')::timestamptz
     WHEN status = 'closed'
     THEN COALESCE(
       archive_after,
@@ -23,11 +23,11 @@ SET
     ELSE NULL
   END
 WHERE deadline IS NOT NULL
-  AND deadline::date < pg_catalog.current_date;
+  AND deadline::date < CURRENT_DATE;
 
 UPDATE public.job_vacancy
 SET archive_after = CASE
-  WHEN deadline IS NOT NULL AND deadline::date <= pg_catalog.current_date
+  WHEN deadline IS NOT NULL AND deadline::date <= CURRENT_DATE
   THEN (deadline::date::timestamp without time zone + interval '1 month')::timestamptz
   ELSE pg_catalog.statement_timestamp() + interval '1 month'
 END
@@ -47,7 +47,7 @@ DECLARE
   deadline_archive_after timestamptz;
 BEGIN
   IF NEW.deadline IS NOT NULL THEN
-    IF NEW.deadline::date <= pg_catalog.current_date THEN
+    IF NEW.deadline::date <= CURRENT_DATE THEN
       deadline_archive_after :=
         (NEW.deadline::date::timestamp without time zone + interval '1 month')::timestamptz;
     END IF;
@@ -103,7 +103,7 @@ BEGIN
   SET status = 'closed'
   WHERE status = 'open'
     AND deadline IS NOT NULL
-    AND deadline::date < pg_catalog.current_date;
+    AND deadline::date < CURRENT_DATE;
 
   GET DIAGNOSTICS closed_count = ROW_COUNT;
   RETURN closed_count;
