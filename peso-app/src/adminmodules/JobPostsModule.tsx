@@ -486,7 +486,9 @@ export default function JobPostsModule({
                         {formatDate(job.date_posted || job.created_at)}
                       </td>
                       <td className="px-3 py-3">
-                        {renderActions(job, rowId)}
+                        <div className="flex justify-end">
+                          {renderActions(job, rowId)}
+                        </div>
                       </td>
                     </tr>
                     );
