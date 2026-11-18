@@ -1,8 +1,10 @@
-import { useState, type ComponentType } from "react";
+import { useRef, useState, type ComponentType } from "react";
 import AppIcon from "../components/AppIcon";
 import FilterDropdown from "../components/FilterDropdown";
 import ModuleScoreboard from "../components/ModuleScoreboard";
 import JobPostArchiveTabs from "../components/JobPostArchiveTabs";
+import JobDetailsModal from "../components/JobDetailsModal";
+import ProfileAvatar from "../components/ProfileAvatar";
 import { isJobPostArchived } from "../utils/jobPostArchive";
 
 type JobPost = {
@@ -16,6 +18,7 @@ type JobPost = {
   employer_name?: string;
   employer_id?: string;
   employer_logo_url?: string | null;
+  employer_user_id?: string | null;
   location?: string;
   employment_type?: string;
   salary_min?: number | string | null;
@@ -27,6 +30,10 @@ type JobPost = {
   created_at?: string;
   date_posted?: string;
   deadline?: string | null;
+  image_url?: string | null;
+  job_qualifications?: string | null;
+  requirements?: string | null;
+  job_classification?: string | null;
   archive_after?: string | null;
   archived_at?: string | null;
   [key: string]: any;
@@ -78,6 +85,46 @@ function getSalaryRange(job: JobPost): string {
   return `${job.salary_min ?? "-"} – ${job.salary_max ?? "-"} per ${period}`;
 }
 
+function JobPostActionsMenu({
+  onView,
+}: {
+  onView: () => void;
+}) {
+  const menuRef = useRef<HTMLDetailsElement>(null);
+
+  return (
+    <details ref={menuRef} className="relative inline-block text-left">
+      <summary
+        aria-label="Job post actions"
+        className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 hover:text-[#0759AE] focus:outline-none focus:ring-2 focus:ring-blue-500 [&::-webkit-details-marker]:hidden"
+      >
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          className="h-5 w-5"
+        >
+          <circle cx="5" cy="12" r="1.75" />
+          <circle cx="12" cy="12" r="1.75" />
+          <circle cx="19" cy="12" r="1.75" />
+        </svg>
+      </summary>
+      <div className="absolute right-0 top-full z-30 mt-1 min-w-32 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+        <button
+          type="button"
+          onClick={() => {
+            menuRef.current?.removeAttribute("open");
+            onView();
+          }}
+          className="w-full rounded-md px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-[#0759AE]"
+        >
+          View
+        </button>
+      </div>
+    </details>
+  );
+}
+
 export default function JobPostsModule({
   jobs,
   loadError,
@@ -93,6 +140,7 @@ export default function JobPostsModule({
 }: Props) {
   const [jobPostSection, setJobPostSection] =
     useState<"active" | "archived">("active");
+  const [selectedJob, setSelectedJob] = useState<JobPost | null>(null);
   const activeCount = jobs.filter((job) => !isJobPostArchived(job)).length;
   const archivedCount = jobs.length - activeCount;
 
@@ -223,6 +271,13 @@ export default function JobPostsModule({
                             alt={`${getEmployerName(job)} logo`}
                             className="h-full w-full object-cover"
                           />
+                        ) : job.employer_user_id ? (
+                          <ProfileAvatar
+                            userId={job.employer_user_id}
+                            fullName={getEmployerName(job)}
+                            size="small"
+                            showControls={false}
+                          />
                         ) : (
                           getEmployerName(job).charAt(0).toUpperCase()
                         )}
@@ -273,6 +328,11 @@ export default function JobPostsModule({
                             Posted {formatDate(job.date_posted || job.created_at)}
                           </p>
                         </div>
+                        <div className="mt-4 flex justify-end">
+                          <JobPostActionsMenu
+                            onView={() => setSelectedJob(job)}
+                          />
+                        </div>
                       </div>
                     </div>
                   </article>
@@ -285,14 +345,15 @@ export default function JobPostsModule({
                 <thead className="bg-gradient-to-r from-[#1766B4] to-[#124A91] text-left">
                   <tr>
                     {[
-                      ["Job Title", "w-[19%]"],
-                      ["Employer", "w-[16%]"],
-                      ["Location", "w-[14%]"],
-                      ["Employment Type", "w-[13%]"],
-                      ["Salary Range", "w-[12%]"],
-                      ["Openings", "w-[8%]"],
-                      ["Status", "w-[9%]"],
-                      ["Date Posted", "w-[11%]"],
+                      ["Job Title", "w-[18%]"],
+                      ["Employer", "w-[15%]"],
+                      ["Location", "w-[12%]"],
+                      ["Employment Type", "w-[12%]"],
+                      ["Salary Range", "w-[11%]"],
+                      ["Openings", "w-[7%]"],
+                      ["Status", "w-[8%]"],
+                      ["Date Posted", "w-[10%]"],
+                      ["Actions", "w-[7%]"],
                     ].map(([label, width]) => (
                       <th
                         key={label}
@@ -330,12 +391,19 @@ export default function JobPostsModule({
                       </td>
                       <td className="px-3 py-3 text-xs text-slate-700">
                         <div className="flex min-w-0 items-center gap-2">
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-50 text-xs font-bold text-[#1766B4]">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-50 text-xs font-bold text-[#1766B4]">
                             {job.employer_logo_url ? (
                               <img
                                 src={job.employer_logo_url}
                                 alt=""
                                 className="h-full w-full object-cover"
+                              />
+                            ) : job.employer_user_id ? (
+                              <ProfileAvatar
+                                userId={job.employer_user_id}
+                                fullName={getEmployerName(job)}
+                                size="small"
+                                showControls={false}
                               />
                             ) : (
                               getEmployerName(job).charAt(0).toUpperCase()
@@ -362,6 +430,11 @@ export default function JobPostsModule({
                       <td className="whitespace-nowrap px-3 py-3 text-xs text-slate-500">
                         {formatDate(job.date_posted || job.created_at)}
                       </td>
+                      <td className="px-3 py-3">
+                        <JobPostActionsMenu
+                          onView={() => setSelectedJob(job)}
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -370,6 +443,32 @@ export default function JobPostsModule({
           </>
         )}
       </section>
+      {selectedJob && (
+        <JobDetailsModal
+          job={{
+            id:
+              selectedJob.job_vacancy_id ||
+              selectedJob.id ||
+              getJobTitle(selectedJob),
+            title: getJobTitle(selectedJob),
+            company: getEmployerName(selectedJob),
+            companyLogoUrl: selectedJob.employer_logo_url,
+            location: selectedJob.location,
+            employmentType: selectedJob.employment_type,
+            classification: selectedJob.job_classification,
+            salary: getSalaryRange(selectedJob),
+            description: selectedJob.description,
+            jobQualifications: selectedJob.job_qualifications,
+            requirements: selectedJob.requirements,
+            openings: selectedJob.vacancies_available,
+            deadline: selectedJob.deadline,
+            datePosted: selectedJob.date_posted || selectedJob.created_at,
+            imageUrl: selectedJob.image_url,
+          }}
+          onClose={() => setSelectedJob(null)}
+          footerNote="Viewing the registered job post."
+        />
+      )}
     </div>
   );
 }

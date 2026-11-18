@@ -1212,7 +1212,11 @@ export default function AdminDashboard() {
       const employersById = new Map(
         parseJobPostEmployerSummaries(employersResult.data).map((employer) => [
           employer.employer_id,
-          { name: employer.name, logo_url: employer.logo_url },
+          {
+            name: employer.name,
+            logo_url: employer.logo_url,
+            user_id: employer.user_id,
+          },
         ]),
       );
       setJobPosts(
@@ -1221,6 +1225,8 @@ export default function AdminDashboard() {
           company_name: employersById.get(job.employer_id)?.name || "",
           employer_logo_url:
             employersById.get(job.employer_id)?.logo_url || null,
+          employer_user_id:
+            employersById.get(job.employer_id)?.user_id || null,
         })),
       );
     } catch (error) {

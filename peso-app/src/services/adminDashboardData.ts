@@ -2,6 +2,7 @@ export type JobPostEmployerSummary = {
   employer_id: string;
   name: string;
   logo_url: string | null;
+  user_id: string | null;
 };
 
 export type JobSeekerApplicationCount = {
@@ -53,7 +54,10 @@ export function parseJobPostEmployerSummaries(
     if (
       typeof row.employer_id !== "string" ||
       typeof row.name !== "string" ||
-      (row.logo_url !== null && typeof row.logo_url !== "string")
+      (row.logo_url !== null && typeof row.logo_url !== "string") ||
+      (row.user_id !== undefined &&
+        row.user_id !== null &&
+        typeof row.user_id !== "string")
     ) {
       throw new Error("Supabase returned an invalid job post employer summary.");
     }
@@ -62,6 +66,7 @@ export function parseJobPostEmployerSummaries(
       employer_id: row.employer_id,
       name: row.name,
       logo_url: row.logo_url,
+      user_id: typeof row.user_id === "string" ? row.user_id : null,
     };
   });
 }
