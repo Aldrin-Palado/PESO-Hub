@@ -134,10 +134,10 @@ export default function JobPostsModule({
         <div className="mb-4">
           <h2 className="text-sm font-bold text-slate-900">Find job posts</h2>
           <p className="mt-1 text-xs text-slate-500">
-            Search vacancies or filter by posting status.
+            Search vacancies or filter by status or archive.
           </p>
         </div>
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-end">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_220px] lg:items-end">
           <label className="block text-xs font-semibold text-slate-600">
             Search job posts
             <span className="relative mt-1.5 block">
@@ -154,6 +154,17 @@ export default function JobPostsModule({
               />
             </span>
           </label>
+          <div>
+            <p className="text-xs font-semibold text-slate-600">Job post archive</p>
+            <div className="mt-1.5">
+              <JobPostArchiveTabs
+                value={jobPostSection}
+                onChange={setJobPostSection}
+                activeCount={activeCount}
+                archivedCount={archivedCount}
+              />
+            </div>
+          </div>
           <label className="block text-xs font-semibold text-slate-600">
             Posting status
             <FilterDropdown
@@ -181,14 +192,6 @@ export default function JobPostsModule({
             <p className="mt-0.5 text-xs text-slate-500">
               Vacancy details and employer information
             </p>
-          </div>
-          <div className="w-full sm:max-w-[36rem]">
-            <JobPostArchiveTabs
-              value={jobPostSection}
-              onChange={setJobPostSection}
-              activeCount={activeCount}
-              archivedCount={archivedCount}
-            />
           </div>
         </div>
 
