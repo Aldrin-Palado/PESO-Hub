@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import pesoLogo from "../assets/images/peso-logo-mark.png";
 import MyJobPostModule from "../employersmodules/MyJobPostModule";
 import { supabase } from "../services/supabase";
 
@@ -57,7 +58,7 @@ export default function PESOJobPostsModule() {
 
     setEmployerId(pesoEmployer.employer_id);
     setEmployerName(pesoEmployer.name || "PESO Mabini");
-    setEmployerLogoUrl(pesoEmployer.logo_url);
+    setEmployerLogoUrl(pesoEmployer.logo_url || pesoLogo);
 
     const { data, error } = await supabase
       .from("job_vacancy")
