@@ -80,12 +80,8 @@ export default function DashboardModule({
 
 const pendingApplicationCount =
   stats.Applications?.find((item) => item.label === "Pending")?.value ?? 0;
+const hasPendingReview = pendingEmployerCount > 0 || pendingApplicationCount > 0;
 
-const canViewEmployers =
-  isAdmin || permissions.includes("Employers");
-
-const canViewApplications =
-  isAdmin || permissions.includes("Applications");
   const overallMetrics = [
     { module: "Job Post", label: "Job Posts", icon: "briefcase" },
     { module: "Applications", label: "Applications", icon: "file" },
@@ -336,62 +332,86 @@ const canViewApplications =
         </p>
       )}
 
-      {!statsLoading &&
-  ((canViewEmployers && pendingEmployerCount > 0) ||
-    (canViewApplications && pendingApplicationCount > 0)) && (
-    <section className="rounded-xl border border-amber-200 bg-amber-50/60 p-5">
-      <div className="mb-4">
-        <h2 className="text-lg font-bold text-slate-900">
-          Needs Attention
-        </h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Items awaiting review or follow-up.
-        </p>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        {canViewEmployers && pendingEmployerCount > 0 && (
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-amber-100 bg-white p-4">
-            <div>
-              <p className="text-sm font-semibold text-slate-800">
-                Employers awaiting verification
-              </p>
-              <p className="mt-1 text-sm text-slate-500">
-                {pendingEmployerCount} pending
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => onNavigate("Employers")}
-              className="shrink-0 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-[#244FE8] hover:bg-blue-50"
+      {isAdmin && (
+        <section
+          aria-labelledby="needs-review-heading"
+          className={`rounded-xl border p-5 ${
+            hasPendingReview
+              ? "border-amber-200 bg-amber-50/60"
+              : "border-slate-200 bg-white"
+          }`}
+        >
+          <div className="mb-4">
+            <h2
+              id="needs-review-heading"
+              className="text-lg font-bold text-slate-900"
             >
-              Review
-            </button>
+              Needs Review
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Pending records that require an administrator decision.
+            </p>
           </div>
-        )}
 
-        {canViewApplications && pendingApplicationCount > 0 && (
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-amber-100 bg-white p-4">
-            <div>
-              <p className="text-sm font-semibold text-slate-800">
-                Applications pending review
-              </p>
-              <p className="mt-1 text-sm text-slate-500">
-                {pendingApplicationCount} pending
-              </p>
+          {statsLoading ? (
+            <p className="rounded-lg border border-amber-100 bg-white p-4 text-sm text-slate-600">
+              Loading pending review records...
+            </p>
+          ) : !stats.Employers || !stats.Applications ? (
+            <p role="status" className="rounded-lg border border-amber-100 bg-white p-4 text-sm text-slate-600">
+              Review records are unavailable until employer and application data has loaded.
+            </p>
+          ) : pendingEmployerCount === 0 && pendingApplicationCount === 0 ? (
+            <p className="rounded-lg border border-amber-100 bg-white p-4 text-sm text-slate-600">
+              No pending employer verifications or applications need review.
+            </p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {pendingEmployerCount > 0 && (
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-amber-100 bg-white p-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">
+                      Employer verifications awaiting a decision
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {pendingEmployerCount.toLocaleString()} pending verification
+                      {pendingEmployerCount === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate("Employers")}
+                    className="shrink-0 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-[#244FE8] hover:bg-blue-50"
+                  >
+                    Review
+                  </button>
+                </div>
+              )}
+
+              {pendingApplicationCount > 0 && (
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-amber-100 bg-white p-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">
+                      Applications awaiting a decision
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {pendingApplicationCount.toLocaleString()} pending
+                      {pendingApplicationCount === 1 ? " application" : " applications"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate("Applications")}
+                    className="shrink-0 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-[#244FE8] hover:bg-blue-50"
+                  >
+                    Review
+                  </button>
+                </div>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={() => onNavigate("Applications")}
-              className="shrink-0 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-[#244FE8] hover:bg-blue-50"
-            >
-              Review
-            </button>
-          </div>
-        )}
-      </div>
-    </section>
-  )}
+          )}
+        </section>
+      )}
 
       {account?.role === "superadmin" && (
         <section className="flex flex-col gap-5 rounded-xl border border-blue-100 bg-blue-50/70 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
