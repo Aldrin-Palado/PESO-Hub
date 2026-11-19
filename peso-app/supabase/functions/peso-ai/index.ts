@@ -13,6 +13,8 @@ const maxChatResumeBytes = 500_000;
 const maxChatResumeTextLength = 30_000;
 const maxProfileTextLength = 4_000;
 const maxChatHistoryMessages = 6;
+const maxUserMessageLength = 2_000;
+const maxHistoryReplyLength = 3_000;
 const maxVacanciesForAI = 30;
 const maxGenerationDurationMs = 20_000;
 const vacancyCacheTtlMs = 30_000;
@@ -498,7 +500,8 @@ async function handleChat(
   }
   if (body.messages.length > 12) throw new Error("Chat history is too long. Start a new conversation.");
 
-  const messages = body.messages.map((message): ChatMessage => {
+  const lastIndex = body.messages.length - 1;
+  const messages = body.messages.map((message, index): ChatMessage => {
     if (
       !message ||
       typeof message !== "object" ||
@@ -509,9 +512,23 @@ async function handleChat(
     ) {
       throw new Error("The chat message format is invalid.");
     }
-    const content = message.content.trim();
-    if (!content || content.length > 1_000) {
-      throw new Error("Each chat message must be between 1 and 1,000 characters.");
+    let content = message.content.trim();
+    if (!content) {
+      throw new Error("Chat messages cannot be empty.");
+    }
+    const limit = message.role === "user"
+      ? maxUserMessageLength
+      : maxHistoryReplyLength;
+    if (content.length > limit) {
+      // The person's newest message is rejected with a clear error.
+      // Older messages (and long assistant replies kept as chat history)
+      // are trimmed instead, so one long reply never breaks the chat.
+      if (index === lastIndex && message.role === "user") {
+        throw new Error(
+          `Please keep your message under ${maxUserMessageLength} characters.`,
+        );
+      }
+      content = content.slice(0, limit);
     }
     return { role: message.role, content };
   }).slice(-maxChatHistoryMessages);
