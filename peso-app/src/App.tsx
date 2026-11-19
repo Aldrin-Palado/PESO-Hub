@@ -58,7 +58,7 @@ function App() {
           element={<JobSeekerRegistration />}
         />
         <Route
-          path="/admin"
+          path="/superadmin"
           element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>}
         />
         <Route
