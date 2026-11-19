@@ -45,6 +45,12 @@ export default function DirectMessages({
   const [userId, setUserId] = useState("");
   const [mailboxUserId, setMailboxUserId] = useState("");
   const [contacts, setContacts] = useState<MessageContact[]>([]);
+  const [archivedConversationIds, setArchivedConversationIds] = useState<
+    string[]
+  >([]);
+  const [conversationSection, setConversationSection] = useState<
+    "active" | "archived"
+  >("active");
   const [pendingContact, setPendingContact] = useState<MessageContact | null>(null);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [messages, setMessages] = useState<PesoMessage[]>([]);
@@ -53,6 +59,9 @@ export default function DirectMessages({
   const [resolvingRecipient, setResolvingRecipient] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [archivingContactId, setArchivingContactId] = useState<string | null>(
+    null,
+  );
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
   const [openMessageMenuId, setOpenMessageMenuId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -64,6 +73,14 @@ export default function DirectMessages({
   const selectedContact =
     contacts.find((contact) => contact.user_id === selectedUserId) ??
     (pendingContact?.user_id === selectedUserId ? pendingContact : null);
+  const visibleContacts = contacts.filter((contact) =>
+    archivedConversationIds.includes(contact.user_id) ===
+    (conversationSection === "archived"),
+  );
+  const activeContactCount = contacts.filter(
+    (contact) => !archivedConversationIds.includes(contact.user_id),
+  ).length;
+  const archivedContactCount = contacts.length - activeContactCount;
   const recipientUserId = selectedContact?.user_id;
   const conversationOwnerId = mode === "staff" ? mailboxUserId : userId;
 
@@ -138,6 +155,19 @@ export default function DirectMessages({
 
       if (!cancelled) setUserId(user.id);
 
+      const { data: archiveRows, error: archiveError } = await supabase
+        .from("peso_message_archives")
+        .select("contact_user_id")
+        .eq("owner_user_id", user.id);
+      if (archiveError) throw archiveError;
+      const archivedIds = (archiveRows ?? []).map(
+        (row) => row.contact_user_id,
+      );
+      if (!cancelled) {
+        setArchivedConversationIds(archivedIds);
+        setConversationSection("active");
+      }
+
       let inboxOwnerId = user.id;
       if (mode === "admin" || mode === "staff") {
         const { data: adminInboxUserId, error: inboxError } = await supabase.rpc(
@@ -163,15 +193,18 @@ export default function DirectMessages({
         await refreshConversationContacts(inboxOwnerId);
       if (cancelled) return;
       setContacts(availableContacts);
-      setSelectedUserId((current) =>
-        availableContacts.some(
-          (contact) => contact.user_id === initialContactId,
-        )
-          ? initialContactId ?? ""
-          : availableContacts.some((contact) => contact.user_id === current)
-            ? current
-            : availableContacts[0]?.user_id ?? "",
+      const activeContacts = availableContacts.filter(
+        (contact) => !archivedIds.includes(contact.user_id),
       );
+      setSelectedUserId((current) => {
+        if (activeContacts.some((contact) => contact.user_id === initialContactId)) {
+          return initialContactId ?? "";
+        }
+        if (activeContacts.some((contact) => contact.user_id === current)) {
+          return current;
+        }
+        return activeContacts[0]?.user_id ?? "";
+      });
 
       if (!cancelled) setLoading(false);
     };
@@ -540,6 +573,50 @@ export default function DirectMessages({
     setDeletingMessageId(null);
   };
 
+  const toggleConversationArchive = async (contact: MessageContact) => {
+    if (!userId || archivingContactId) return;
+
+    const isArchived = archivedConversationIds.includes(contact.user_id);
+    setArchivingContactId(contact.user_id);
+    setError("");
+
+    const { error: archiveError } = isArchived
+      ? await supabase
+          .from("peso_message_archives")
+          .delete()
+          .eq("owner_user_id", userId)
+          .eq("contact_user_id", contact.user_id)
+      : await supabase.from("peso_message_archives").insert({
+          owner_user_id: userId,
+          contact_user_id: contact.user_id,
+        });
+
+    if (archiveError) {
+      setError(
+        `Could not ${isArchived ? "restore" : "archive"} conversation: ${archiveError.message}`,
+      );
+    } else {
+      setArchivedConversationIds((current) =>
+        isArchived
+          ? current.filter((contactId) => contactId !== contact.user_id)
+          : [...current, contact.user_id],
+      );
+      if (!isArchived && selectedUserId === contact.user_id) {
+        setSelectedUserId(
+          contacts.find(
+            (item) =>
+              item.user_id !== contact.user_id &&
+              !archivedConversationIds.includes(item.user_id),
+          )?.user_id ?? "",
+        );
+      } else if (isArchived && selectedUserId === contact.user_id) {
+        setSelectedUserId("");
+      }
+    }
+
+    setArchivingContactId(null);
+  };
+
   return (
     <section className="space-y-5">
       {realtimeUnavailable && (
@@ -604,37 +681,83 @@ export default function DirectMessages({
                 </button>
               </form>
             )}
+            <div
+              className="grid grid-cols-2 gap-1 border-b border-slate-100 p-2"
+              aria-label="Conversation list filter"
+            >
+              <button
+                type="button"
+                aria-pressed={conversationSection === "active"}
+                onClick={() => setConversationSection("active")}
+                className={`rounded-lg px-2 py-2 text-xs font-semibold ${
+                  conversationSection === "active"
+                    ? "bg-blue-50 text-blue-800"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                Active ({activeContactCount})
+              </button>
+              <button
+                type="button"
+                aria-pressed={conversationSection === "archived"}
+                onClick={() => setConversationSection("archived")}
+                className={`rounded-lg px-2 py-2 text-xs font-semibold ${
+                  conversationSection === "archived"
+                    ? "bg-blue-50 text-blue-800"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                Archived ({archivedContactCount})
+              </button>
+            </div>
             <div className="max-h-72 overflow-y-auto md:max-h-[32rem]">
-              {contacts.length === 0 && !loading && !error ? (
+              {visibleContacts.length === 0 && !loading && !error ? (
                 <p className="p-4 text-sm text-slate-500">
-                  {pendingContact
+                  {conversationSection === "archived"
+                    ? "No archived conversations."
+                    : pendingContact
                     ? "No conversations yet. Send a message to start this one."
                     : "No conversations yet."}
                 </p>
-              ) : contacts.length === 0 && loading ? (
+              ) : visibleContacts.length === 0 && loading ? (
                 <p className="p-4 text-sm text-slate-500">Loading contacts...</p>
               ) : (
-                contacts.map((contact) => (
-                  <button
+                visibleContacts.map((contact) => (
+                  <div
                     key={contact.user_id}
-                    type="button"
-                    onClick={() => {
-                      setPendingContact(null);
-                      setSelectedUserId(contact.user_id);
-                    }}
-                    className={`block w-full border-b border-slate-100 px-4 py-3 text-left transition ${
-                      selectedUserId === contact.user_id
-                        ? "bg-blue-50"
-                        : "hover:bg-slate-50"
+                    className={`flex items-center border-b border-slate-100 transition ${
+                      selectedUserId === contact.user_id ? "bg-blue-50" : "hover:bg-slate-50"
                     }`}
                   >
-                    <span className="block truncate text-sm font-semibold text-slate-800">
-                      {contact.display_name}
-                    </span>
-                    <span className="mt-1 block text-xs text-slate-500">
-                      {contact.role}
-                    </span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPendingContact(null);
+                        setSelectedUserId(contact.user_id);
+                      }}
+                      className="min-w-0 flex-1 px-4 py-3 text-left"
+                    >
+                      <span className="block truncate text-sm font-semibold text-slate-800">
+                        {contact.display_name}
+                      </span>
+                      <span className="mt-1 block text-xs text-slate-500">
+                        {contact.role}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`${archivedConversationIds.includes(contact.user_id) ? "Restore" : "Archive"} conversation with ${contact.display_name}`}
+                      onClick={() => void toggleConversationArchive(contact)}
+                      disabled={archivingContactId !== null}
+                      className="mr-2 shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-white hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {archivingContactId === contact.user_id
+                        ? "Saving..."
+                        : archivedConversationIds.includes(contact.user_id)
+                          ? "Restore"
+                          : "Archive"}
+                    </button>
+                  </div>
                 ))
               )}
             </div>
