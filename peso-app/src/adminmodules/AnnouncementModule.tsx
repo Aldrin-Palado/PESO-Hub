@@ -203,14 +203,16 @@ export default function AnnouncementModule({
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => void handleCreate()}
-            disabled={isPublishing}
-            className="rounded-lg bg-blue-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isPublishing ? "Publishing..." : "Publish Announcement"}
-          </button>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => void handleCreate()}
+              disabled={isPublishing}
+              className="rounded-lg bg-blue-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isPublishing ? "Publishing..." : "Publish Announcement"}
+            </button>
+          </div>
         </div>
       </div>
 
