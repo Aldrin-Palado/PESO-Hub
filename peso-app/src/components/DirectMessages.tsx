@@ -64,6 +64,7 @@ export default function DirectMessages({
   );
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
   const [openMessageMenuId, setOpenMessageMenuId] = useState<string | null>(null);
+  const [openConversationMenuId, setOpenConversationMenuId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [realtimeUnavailable, setRealtimeUnavailable] = useState(false);
   const [sessionMissing, setSessionMissing] = useState(false);
@@ -688,7 +689,10 @@ export default function DirectMessages({
               <button
                 type="button"
                 aria-pressed={conversationSection === "active"}
-                onClick={() => setConversationSection("active")}
+                onClick={() => {
+                  setConversationSection("active");
+                  setOpenConversationMenuId(null);
+                }}
                 className={`rounded-lg px-2 py-2 text-xs font-semibold ${
                   conversationSection === "active"
                     ? "bg-blue-50 text-blue-800"
@@ -700,7 +704,10 @@ export default function DirectMessages({
               <button
                 type="button"
                 aria-pressed={conversationSection === "archived"}
-                onClick={() => setConversationSection("archived")}
+                onClick={() => {
+                  setConversationSection("archived");
+                  setOpenConversationMenuId(null);
+                }}
                 className={`rounded-lg px-2 py-2 text-xs font-semibold ${
                   conversationSection === "archived"
                     ? "bg-blue-50 text-blue-800"
@@ -725,7 +732,7 @@ export default function DirectMessages({
                 visibleContacts.map((contact) => (
                   <div
                     key={contact.user_id}
-                    className={`flex items-center border-b border-slate-100 transition ${
+                    className={`relative flex items-center border-b border-slate-100 transition ${
                       selectedUserId === contact.user_id ? "bg-blue-50" : "hover:bg-slate-50"
                     }`}
                   >
@@ -734,6 +741,7 @@ export default function DirectMessages({
                       onClick={() => {
                         setPendingContact(null);
                         setSelectedUserId(contact.user_id);
+                        setOpenConversationMenuId(null);
                       }}
                       className="min-w-0 flex-1 px-4 py-3 text-left"
                     >
@@ -744,19 +752,55 @@ export default function DirectMessages({
                         {contact.role}
                       </span>
                     </button>
-                    <button
-                      type="button"
-                      aria-label={`${archivedConversationIds.includes(contact.user_id) ? "Restore" : "Archive"} conversation with ${contact.display_name}`}
-                      onClick={() => void toggleConversationArchive(contact)}
-                      disabled={archivingContactId !== null}
-                      className="mr-2 shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-white hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {archivingContactId === contact.user_id
-                        ? "Saving..."
-                        : archivedConversationIds.includes(contact.user_id)
-                          ? "Restore"
-                          : "Archive"}
-                    </button>
+                    <div className="relative mr-2 shrink-0">
+                      <button
+                        type="button"
+                        aria-label={`Conversation options for ${contact.display_name}`}
+                        aria-haspopup="menu"
+                        aria-expanded={openConversationMenuId === contact.user_id}
+                        onClick={() =>
+                          setOpenConversationMenuId((current) =>
+                            current === contact.user_id ? null : contact.user_id,
+                          )
+                        }
+                        disabled={archivingContactId !== null}
+                        className="rounded-md p-2 text-slate-500 hover:bg-white hover:text-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4"
+                          fill="currentColor"
+                        >
+                          <circle cx="5" cy="12" r="1.75" />
+                          <circle cx="12" cy="12" r="1.75" />
+                          <circle cx="19" cy="12" r="1.75" />
+                        </svg>
+                      </button>
+                      {openConversationMenuId === contact.user_id && (
+                        <div
+                          role="menu"
+                          className="absolute right-0 top-1/2 z-20 min-w-28 -translate-y-1/2 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+                        >
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setOpenConversationMenuId(null);
+                              void toggleConversationArchive(contact);
+                            }}
+                            disabled={archivingContactId !== null}
+                            className="w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {archivingContactId === contact.user_id
+                              ? "Saving..."
+                              : archivedConversationIds.includes(contact.user_id)
+                                ? "Restore"
+                                : "Archive"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))
               )}
