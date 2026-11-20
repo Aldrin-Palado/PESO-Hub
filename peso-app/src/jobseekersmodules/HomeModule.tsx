@@ -24,6 +24,7 @@ type PESOAnnouncement = {
   id: string;
   title: string;
   message: string;
+  image_urls: string[] | null;
   created_at: string;
 };
 
@@ -148,7 +149,7 @@ export default function HomeModule({
     const loadAnnouncements = async () => {
       const { data, error } = await supabase
         .from("peso_announcements")
-        .select("id, title, message, created_at")
+        .select("id, title, message, image_urls, created_at")
         .order("created_at", { ascending: false })
         .limit(5);
 
@@ -540,6 +541,18 @@ export default function HomeModule({
                 <h3 className="mt-2 font-bold text-gray-900">
                   {announcement.title}
                 </h3>
+                {announcement.image_urls && announcement.image_urls.length > 0 && (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {announcement.image_urls.map((imageUrl, index) => (
+                      <img
+                        key={imageUrl}
+                        src={imageUrl}
+                        alt={`${announcement.title} image ${index + 1}`}
+                        className="h-36 w-full rounded-lg object-cover"
+                      />
+                    ))}
+                  </div>
+                )}
                 <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-600">
                   {announcement.message}
                 </p>

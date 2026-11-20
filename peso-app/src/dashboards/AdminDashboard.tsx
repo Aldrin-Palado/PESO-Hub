@@ -46,6 +46,10 @@ import {
   parseJobPostEmployerSummaries,
   parseJobSeekerApplicationCounts,
 } from "../services/adminDashboardData";
+import {
+  announcementImageBucket,
+  getStoredAnnouncementImagePath,
+} from "../utils/announcementImages";
 
 /* ============================================================
    TYPES
@@ -154,6 +158,7 @@ type Announcement = {
   id: string;
   title: string;
   message: string;
+  image_urls: string[] | null;
   created_at: string;
 };
 
@@ -291,6 +296,7 @@ export default function AdminDashboard() {
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementMessage, setAnnouncementMessage] = useState("");
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcementPublishing, setAnnouncementPublishing] = useState(false);
 
   /* ============================================================
      SEARCH
@@ -674,7 +680,7 @@ export default function AdminDashboard() {
   const loadAnnouncements = async () => {
     const { data, error } = await supabase
       .from("peso_announcements")
-      .select("id, title, message, created_at")
+      .select("id, title, message, image_urls, created_at")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -686,46 +692,100 @@ export default function AdminDashboard() {
     setAnnouncements((data ?? []) as Announcement[]);
   };
 
-  const createAnnouncement = async () => {
+  const createAnnouncement = async (images: File[]): Promise<boolean> => {
     const title = announcementTitle.trim();
     const message = announcementMessage.trim();
     if (!title || !message) {
       alert("Please enter an announcement title and message.");
-      return;
+      return false;
     }
 
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError) {
-      alert(`Unable to verify your account: ${authError.message}`);
-      return;
-    }
-    if (!authData.user) {
-      alert("Please sign in again before publishing an announcement.");
-      return;
-    }
+    setAnnouncementPublishing(true);
+    const uploadedPaths: string[] = [];
+    let cleanupFailed = false;
 
-    const { data, error } = await supabase
-      .from("peso_announcements")
-      .insert({
-        title,
-        message,
-        created_by: authData.user.id,
-      })
-      .select("id, title, message, created_at")
-      .single();
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) throw new Error(`Unable to verify your account: ${authError.message}`);
+      if (!authData.user) {
+        throw new Error("Please sign in again before publishing an announcement.");
+      }
 
-    if (error) {
+      const announcementId = crypto.randomUUID();
+      const imageUrls: string[] = [];
+      for (const [index, image] of images.entries()) {
+        const extension = image.type === "image/jpeg"
+          ? "jpg"
+          : image.type === "image/png"
+            ? "png"
+            : "webp";
+        const path = `${announcementId}/${Date.now()}-${index}-${crypto.randomUUID()}.${extension}`;
+        const { error: uploadError } = await supabase.storage
+          .from(announcementImageBucket)
+          .upload(path, image, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: image.type,
+          });
+        if (uploadError) throw new Error(`Could not upload ${image.name}: ${uploadError.message}`);
+
+        uploadedPaths.push(path);
+        const { data: publicUrl } = supabase.storage
+          .from(announcementImageBucket)
+          .getPublicUrl(path);
+        imageUrls.push(publicUrl.publicUrl);
+      }
+
+      const { data, error } = await supabase
+        .from("peso_announcements")
+        .insert({
+          id: announcementId,
+          title,
+          message,
+          image_urls: imageUrls,
+          created_by: authData.user.id,
+        })
+        .select("id, title, message, image_urls, created_at")
+        .single();
+
+      if (error) throw new Error(error.message);
+
+      setAnnouncements((current) => [data as Announcement, ...current]);
+      setAnnouncementTitle("");
+      setAnnouncementMessage("");
+      return true;
+    } catch (error) {
       console.error("Error creating PESO announcement:", error);
-      alert(`Unable to publish announcement: ${error.message}`);
-      return;
-    }
 
-    setAnnouncements((current) => [data as Announcement, ...current]);
-    setAnnouncementTitle("");
-    setAnnouncementMessage("");
+      if (uploadedPaths.length > 0) {
+        try {
+          const { error: cleanupError } = await supabase.storage
+            .from(announcementImageBucket)
+            .remove(uploadedPaths);
+          if (cleanupError) {
+            cleanupFailed = true;
+            console.error("Could not remove incomplete announcement images:", cleanupError);
+          }
+        } catch (cleanupError) {
+          cleanupFailed = true;
+          console.error("Could not remove incomplete announcement images:", cleanupError);
+        }
+      }
+
+      const errorMessage = error instanceof Error ? error.message : "Unknown error.";
+      alert(
+        `Unable to publish announcement: ${errorMessage}${
+          cleanupFailed ? " Uploaded images may need to be removed from storage." : ""
+        }`,
+      );
+      return false;
+    } finally {
+      setAnnouncementPublishing(false);
+    }
   };
 
   const deleteAnnouncement = async (id: string) => {
+    const announcement = announcements.find((item) => item.id === id);
     const { error } = await supabase
       .from("peso_announcements")
       .delete()
@@ -740,6 +800,24 @@ export default function AdminDashboard() {
     setAnnouncements((current) =>
       current.filter((announcement) => announcement.id !== id),
     );
+
+    const imagePaths = (announcement?.image_urls ?? [])
+      .map(getStoredAnnouncementImagePath)
+      .filter((path): path is string => path !== null);
+    if (imagePaths.length > 0) {
+      try {
+        const { error: imageError } = await supabase.storage
+          .from(announcementImageBucket)
+          .remove(imagePaths);
+        if (imageError) throw imageError;
+      } catch (imageError) {
+        console.error(
+          "Announcement deleted, but its images could not be removed:",
+          imageError,
+        );
+        alert("Announcement deleted, but some images could not be removed from storage.");
+      }
+    }
   };
 
   /* ============================================================
@@ -2126,7 +2204,8 @@ export default function AdminDashboard() {
             message={announcementMessage}
             setMessage={setAnnouncementMessage}
             announcements={announcements}
-            onCreate={() => void createAnnouncement()}
+            isPublishing={announcementPublishing}
+            onCreate={createAnnouncement}
             onDelete={(id) => void deleteAnnouncement(id)}
             EmptyMessage={EmptyMessage}
             formatDate={formatDate}

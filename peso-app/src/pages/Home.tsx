@@ -33,6 +33,7 @@ type PESOAnnouncement = {
   id: string;
   title: string;
   message: string;
+  image_urls: string[] | null;
   created_at: string;
 };
 
@@ -179,7 +180,7 @@ function Home() {
     const loadAnnouncements = async () => {
       const { data, error } = await supabase
         .from("peso_announcements")
-        .select("id, title, message, created_at")
+        .select("id, title, message, image_urls, created_at")
         .order("created_at", { ascending: false })
         .limit(5);
 
@@ -551,6 +552,23 @@ function Home() {
                     })}
                   </time>
                   <h3 className="mt-2 font-bold text-slate-900">{announcement.title}</h3>
+                  {announcement.image_urls && announcement.image_urls.length > 0 && (
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {announcement.image_urls.slice(0, 2).map((imageUrl, index) => (
+                        <img
+                          key={imageUrl}
+                          src={imageUrl}
+                          alt={`${announcement.title} image ${index + 1}`}
+                          className="h-24 w-full rounded-lg object-cover"
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {announcement.image_urls && announcement.image_urls.length > 2 && (
+                    <p className="mt-1 text-xs font-medium text-slate-500">
+                      +{announcement.image_urls.length - 2} more images
+                    </p>
+                  )}
                   <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">
                     {announcement.message}
                   </p>
@@ -1054,6 +1072,19 @@ function Home() {
               <h2 id="public-announcement-title" className="mt-2 text-2xl font-black text-slate-900">
                 {selectedAnnouncement.title}
               </h2>
+              {selectedAnnouncement.image_urls &&
+                selectedAnnouncement.image_urls.length > 0 && (
+                  <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {selectedAnnouncement.image_urls.map((imageUrl, index) => (
+                      <img
+                        key={imageUrl}
+                        src={imageUrl}
+                        alt={`${selectedAnnouncement.title} image ${index + 1}`}
+                        className="max-h-96 w-full rounded-xl object-contain"
+                      />
+                    ))}
+                  </div>
+                )}
               <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-600">
                 {selectedAnnouncement.message}
               </p>
