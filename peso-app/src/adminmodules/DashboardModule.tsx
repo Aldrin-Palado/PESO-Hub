@@ -75,6 +75,8 @@ export default function DashboardModule({
   onNavigate,
 }: Props) {
   const isAdmin = account?.role === "admin";
+  const canViewApplications =
+    isAdmin || permissions.includes("Applications");
   const pendingEmployerCount =
   stats.Employers?.find((item) => item.label === "Pending")?.value ?? 0;
 
