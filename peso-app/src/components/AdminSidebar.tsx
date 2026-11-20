@@ -22,7 +22,7 @@ type AdminSidebarProps = {
   activePage: AdminModule | "My Profile";
   setActivePage: (page: AdminModule | "My Profile") => void;
   permissions: AdminModule[];
-  isSuperadmin: boolean;
+  isAdmin: boolean;
   hasUnreadMessages: boolean;
 };
 
@@ -30,7 +30,7 @@ export default function AdminSidebar({
   activePage,
   setActivePage,
   permissions,
-  isSuperadmin,
+  isAdmin,
   hasUnreadMessages,
 }: AdminSidebarProps) {
   // Off-canvas below `lg`: a permanently fixed 256px column leaves no room
@@ -79,12 +79,12 @@ export default function AdminSidebar({
       module === "Admin Accounts" ||
       module === "Admin Audit Logs"
     ) {
-      return isSuperadmin;
+      return isAdmin;
     }
 
     // Admin has access to all regular modules
     // Staff can only access modules assigned to them
-    return isSuperadmin || permissions.includes(module);
+    return isAdmin || permissions.includes(module);
   };
 
   const handleLogout = async () => {
@@ -118,7 +118,7 @@ export default function AdminSidebar({
           <PesoLogo
             size="sidebar"
             showName
-            subtitle={isSuperadmin ? "Admin Portal" : "Staff Portal"}
+            subtitle={isAdmin ? "Admin Portal" : "Staff Portal"}
             tone="light"
             linkTo={null}
             className="min-w-0"
@@ -190,7 +190,7 @@ export default function AdminSidebar({
           {/* =========================
               ADMINISTRATION
           ========================= */}
-          {isSuperadmin && (
+          {isAdmin && (
             <div className="mt-7">
 
               {/* Separator */}

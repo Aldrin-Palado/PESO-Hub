@@ -272,7 +272,7 @@ function Login() {
 
   // Role-based navigation.
   const routeAuthenticatedUser = async (user: { id: string }) => {
-    // Superadmin
+    // Admin
     const { data: admin, error: adminError } = await supabase
       .from("peso_admin")
       .select("admin_id, user_id, full_name, email, is_active")
@@ -294,7 +294,7 @@ function Login() {
         return;
       }
 
-      navigate("/superadmin", { replace: true });
+      navigate("/admin", { replace: true });
       return;
     }
 
@@ -320,7 +320,7 @@ function Login() {
         return;
       }
 
-      navigate("/superadmin", { replace: true });
+      navigate("/admin", { replace: true });
       return;
     }
 

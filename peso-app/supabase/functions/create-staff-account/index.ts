@@ -15,7 +15,7 @@ export default {
   fetch: withSupabase(
     {
       // The function is called by a logged-in PESO user.
-      // The Superadmin check is performed below.
+      // The Admin check is performed below.
       auth: "user",
     },
 
@@ -59,7 +59,7 @@ export default {
         console.info("Authenticated user:", user.id);
 
         // ============================================================
-        // 3. VERIFY THAT USER IS AN ACTIVE SUPERADMIN
+        // 3. VERIFY THAT USER IS AN ACTIVE ADMIN
         // ============================================================
 
         // IMPORTANT:
@@ -106,14 +106,14 @@ export default {
             {
               success: false,
               message:
-                "Access denied. Only the PESO Superadmin can create staff accounts.",
+                "Access denied. Only the PESO Admin can create staff accounts.",
             },
             { status: 403 }
           );
         }
 
         console.info(
-          "Superadmin verified:",
+          "Admin verified:",
           admin.email
         );
 

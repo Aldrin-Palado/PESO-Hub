@@ -58,7 +58,7 @@ type Account = {
   email: string;
   contact_no?: string | null;
   is_active: boolean;
-  role: "superadmin" | "staff";
+  role: "admin" | "staff";
 };
 
 type Permissions = {
@@ -196,7 +196,7 @@ export default function AdminDashboard() {
   const [activePage, setActivePage] =
     useState<AdminModule | "My Profile">("Dashboard");
   const { logs: auditLogs, loadError: auditLogError } = useAdminAuditLogs(
-    account?.role === "superadmin" &&
+    account?.role === "admin" &&
       (activePage === "Admin Audit Logs" || activePage === "Dashboard"),
     activePage,
   );
@@ -218,14 +218,14 @@ export default function AdminDashboard() {
   const [dashboardRealtimeUnavailable, setDashboardRealtimeUnavailable] =
     useState(false);
 
-  const isSuperadmin =
-    account?.role === "superadmin";
+  const isAdmin =
+    account?.role === "admin";
 
   const saveAccountProfile = async (
     values: Pick<Account, "full_name" | "contact_no">,
   ) => {
     if (!account) throw new Error("Your account profile is not loaded.");
-    if (account.role === "superadmin") {
+    if (account.role === "admin") {
       const { data, error } = await supabase
         .from("peso_admin")
         .update({ full_name: values.full_name.trim() })
@@ -327,7 +327,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (
       account &&
-      (account.role === "superadmin" || permissions.includes("Dashboard"))
+      (account.role === "admin" || permissions.includes("Dashboard"))
     ) {
       loadDashboardCounts();
     }
@@ -441,7 +441,7 @@ export default function AdminDashboard() {
           full_name: admin.full_name,
           email: admin.email,
           is_active: admin.is_active,
-          role: "superadmin",
+          role: "admin",
         });
 
         /*
@@ -657,7 +657,7 @@ export default function AdminDashboard() {
       return true;
     }
 
-    if (account?.role === "superadmin") {
+    if (account?.role === "admin") {
       return true;
     }
 
@@ -754,7 +754,7 @@ export default function AdminDashboard() {
     setMonthlyApplicationTrend([]);
     try {
       const accessibleModules =
-        account.role === "superadmin"
+        account.role === "admin"
           ? [
               "Job Post",
               "Applications",
@@ -985,7 +985,7 @@ export default function AdminDashboard() {
     if (
       !account ||
       activePage !== "Dashboard" ||
-      (account.role !== "superadmin" && !permissions.includes("Applications"))
+      (account.role !== "admin" && !permissions.includes("Applications"))
     ) {
       return;
     }
@@ -1743,7 +1743,7 @@ export default function AdminDashboard() {
                 job &&
                 pesoEmployerIds.has(application.employer_id) &&
                 job.posted_by_user_id === account.user_id &&
-                (account.role === "superadmin" ||
+                (account.role === "admin" ||
                   permissions.includes("Applications")),
             ),
             job_requirements:
@@ -2106,7 +2106,7 @@ export default function AdminDashboard() {
             statusFilter={applicationStatusFilter}
             setStatusFilter={setApplicationStatusFilter}
             loading={moduleLoading}
-            canDecideApplications={isSuperadmin}
+            canDecideApplications={isAdmin}
             onUpdateStatus={updateApplicationStatus}
             onDecideApplication={decideApplication}
             LoadingMessage={LoadingMessage}
@@ -2168,7 +2168,7 @@ export default function AdminDashboard() {
       case "Admin Accounts":
         if (
           account?.role !==
-          "superadmin"
+          "admin"
         ) {
           return <AccessDenied />;
         }
@@ -2176,7 +2176,7 @@ export default function AdminDashboard() {
         return <AdminAccounts />;
 
       case "Admin Audit Logs":
-        if (account?.role !== "superadmin") {
+        if (account?.role !== "admin") {
           return <AccessDenied />;
         }
 
@@ -2226,9 +2226,9 @@ export default function AdminDashboard() {
         setActivePage={setActivePage}
         permissions={permissions}
         hasUnreadMessages={hasUnreadMessages}
-        isSuperadmin={
+        isAdmin={
           account?.role ===
-          "superadmin"
+          "admin"
         }
       />
 
@@ -2258,7 +2258,7 @@ export default function AdminDashboard() {
                   {account?.full_name}
                 </p>
                 <p className="text-[10px] leading-tight text-slate-500 sm:text-xs">
-                  {account?.role === "superadmin" ? "Admin" : "PESO Staff"}
+                  {account?.role === "admin" ? "Admin" : "PESO Staff"}
                 </p>
               </div>
             </div>
@@ -2359,7 +2359,7 @@ function MyProfile({
             <p className="mt-1 text-sm text-slate-500">
               Official PESO account
               <span className="px-1.5" aria-hidden="true">·</span>
-              {account?.role === "superadmin" ? "Super Admin" : "PESO Staff"}
+              {account?.role === "admin" ? "Admin" : "PESO Staff"}
             </p>
             <p className="mt-1 break-words text-sm text-slate-500">
               {account?.email || "Email not available"}

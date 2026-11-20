@@ -19,7 +19,7 @@ type Account = {
   email: string;
   contact_no?: string | null;
   is_active: boolean;
-  role: "superadmin" | "staff";
+  role: "admin" | "staff";
 };
 
 type DashboardMetric = {
@@ -74,7 +74,7 @@ export default function DashboardModule({
   monthlyApplicationTrend,
   onNavigate,
 }: Props) {
-  const isAdmin = account?.role === "superadmin";
+  const isAdmin = account?.role === "admin";
   const pendingEmployerCount =
   stats.Employers?.find((item) => item.label === "Pending")?.value ?? 0;
 
@@ -393,7 +393,7 @@ const canViewApplications =
     </section>
   )}
 
-      {account?.role === "superadmin" && (
+      {account?.role === "admin" && (
         <section className="flex flex-col gap-5 rounded-xl border border-blue-100 bg-blue-50/70 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="flex items-start gap-4">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#244FE8] text-white shadow-sm">
@@ -403,7 +403,7 @@ const canViewApplications =
               </svg>
             </span>
             <div>
-              <h4 className="font-bold text-slate-900">Super Admin Control Center</h4>
+              <h4 className="font-bold text-slate-900">Admin Control Center</h4>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-blue-700">
                 Review administrator accounts and monitor activity across the PESO MABINI platform.
               </p>
@@ -420,7 +420,7 @@ const canViewApplications =
         </section>
       )}
 
-      {account?.role === "superadmin" && (
+      {account?.role === "admin" && (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div>
