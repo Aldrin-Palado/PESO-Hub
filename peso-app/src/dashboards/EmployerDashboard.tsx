@@ -19,6 +19,7 @@ import {
 } from "../services/employerRegistration";
 
 import { supabase } from "../services/supabase";
+import { useConfirmation } from "../components/ConfirmationDialog";
 
 const portalBackground = new URL(
   "../assets/images/bry-bg.png",
@@ -238,6 +239,7 @@ const menuItems: { name: MenuName }[] = [
 ========================= */
 
 export default function EmployerDashboard() {
+  const confirm = useConfirmation();
   const navigateToRoute = useNavigate();
   const [activeMenu, setActiveMenu] =
     useState<MenuName>("Dashboard");
@@ -591,7 +593,7 @@ export default function EmployerDashboard() {
   ========================= */
 
   const signOut = async () => {
-    if (!window.confirm("Are you sure you want to log out?")) return;
+    if (!(await confirm("Are you sure you want to log out?"))) return;
 
     setError("");
 

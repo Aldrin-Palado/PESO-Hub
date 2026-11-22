@@ -31,6 +31,7 @@ import {
   getIncompleteJobSeekerProfileSections,
   isJobSeekerProfileComplete,
 } from "../services/jobSeekerProfile";
+import { useConfirmation } from "../components/ConfirmationDialog";
 
 const portalBackground = new URL(
   "../assets/images/bry-bg.png",
@@ -361,6 +362,7 @@ function parseScreeningDetails(value: unknown): ScreeningDetails {
 // =====================================================
 
 export default function JobSeekerDashboard() {
+  const confirm = useConfirmation();
   const navigate = useNavigate();
   const location = useLocation();
   const [pendingApplicationJobId, setPendingApplicationJobId] = useState<
@@ -935,7 +937,7 @@ export default function JobSeekerDashboard() {
   // =====================================================
 
   const handleLogout = async () => {
-    if (!window.confirm("Are you sure you want to log out?")) return;
+    if (!(await confirm("Are you sure you want to log out?"))) return;
 
     try {
       setLoading(true);

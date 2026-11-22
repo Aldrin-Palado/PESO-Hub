@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import AutoResizeTextarea from "./AutoResizeTextarea";
 import { supabase } from "../services/supabase";
+import { useConfirmation } from "./ConfirmationDialog";
 
 export type MessageMode = "admin" | "staff" | "employer" | "job_seeker";
 
@@ -42,6 +43,7 @@ export default function DirectMessages({
   mode,
   initialContactId,
 }: Props) {
+  const confirm = useConfirmation();
   const [userId, setUserId] = useState("");
   const [mailboxUserId, setMailboxUserId] = useState("");
   const [contacts, setContacts] = useState<MessageContact[]>([]);
@@ -536,7 +538,7 @@ export default function DirectMessages({
       return;
     }
 
-    if (!window.confirm("Delete this message? This cannot be undone.")) return;
+    if (!(await confirm("Delete this message? This cannot be undone."))) return;
 
     setDeletingMessageId(message.message_id);
     setError("");

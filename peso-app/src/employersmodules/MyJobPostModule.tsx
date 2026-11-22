@@ -12,6 +12,7 @@ import JobPostArchiveTabs from "../components/JobPostArchiveTabs";
 import { isJobPostArchived } from "../utils/jobPostArchive";
 import { supabase } from "../services/supabase";
 import { getEmployerRegistrationChecklist } from "../services/employerRegistration";
+import { useConfirmation } from "../components/ConfirmationDialog";
 
 const PROFILE_SETUP_REQUIRED_MESSAGE =
   "Please complete your Profile Setup and have your account verified before posting jobs.";
@@ -191,6 +192,7 @@ export default function MyJobPostModule({
   publisherTitle = "My Job Posts",
   publisherDescription = "Add, update, or close your job vacancies from here.",
 }: Props) {
+  const confirm = useConfirmation();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<JobForm>(emptyForm);
@@ -634,7 +636,7 @@ export default function MyJobPostModule({
   // DELETE JOB POST
 
   const handleDelete = async (job: JobPost) => {
-    const confirmed = window.confirm(
+    const confirmed = await confirm(
       `Are you sure you want to delete "${job.position_title}"?`
     );
 

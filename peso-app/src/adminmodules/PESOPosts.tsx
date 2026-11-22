@@ -3,6 +3,7 @@ import { supabase } from "../services/supabase";
 import FilterDropdown from "../components/FilterDropdown";
 import AutoResizeTextarea from "../components/AutoResizeTextarea";
 import { getPESOPostMedia } from "../utils/pesoPostMedia";
+import { useConfirmation } from "../components/ConfirmationDialog";
 
 type PESOPost = {
   id: string;
@@ -102,6 +103,7 @@ function getPostVideos(post: PESOPost): string[] {
 }
 
 export default function PESOPosts() {
+  const confirm = useConfirmation();
   const [posts, setPosts] = useState<PESOPost[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
@@ -474,7 +476,7 @@ export default function PESOPosts() {
   };
 
   const deletePost = async (post: PESOPost) => {
-    if (!window.confirm(`Delete "${post.title}"? This cannot be undone.`)) return;
+    if (!(await confirm(`Delete "${post.title}"? This cannot be undone.`))) return;
     setBusyPostId(post.id);
     setActionError("");
     setNotice("");

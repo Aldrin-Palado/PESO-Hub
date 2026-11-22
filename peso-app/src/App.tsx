@@ -18,6 +18,7 @@ import AdminDashboard from "./dashboards/AdminDashboard";
 import EmployerDashboard from "./dashboards/EmployerDashboard";
 import JobSeekerDashboard from "./dashboards/JobSeekerDashboard";
 import StaffDashboard from "./dashboards/StaffDashboard";
+import { ConfirmationDialogProvider } from "./components/ConfirmationDialog";
 
 const publicPagePaths = new Set(["/", "/about", "/jobs", "/employers", "/contact"]);
 
@@ -39,44 +40,46 @@ function PublicAIChatbot() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <SessionTimeout />
-      <ScrollToTop />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/jobs" element={<JobVacancies />} />
-        <Route path="/employers" element={<Employers />} />
-        <Route path="/contact" element={<Contact />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/auth/callback" element={<OAuthCallback />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/register" element={<JobSeekerRegistration />} />
-        <Route
-          path="/jobseekerregistration"
-          element={<JobSeekerRegistration />}
-        />
-        <Route
-          path="/admin"
-          element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>}
-        />
-        <Route
-          path="/staff"
-          element={<ProtectedRoute><StaffDashboard /></ProtectedRoute>}
-        />
-        <Route
-          path="/employer"
-          element={<ProtectedRoute><EmployerDashboard /></ProtectedRoute>}
-        />
-        <Route
-          path="/jobseeker"
-          element={<ProtectedRoute><JobSeekerDashboard /></ProtectedRoute>}
-        />
-        <Route path="*" element={<Home />} />
-      </Routes>
-      <PublicAIChatbot />
-    </BrowserRouter>
+    <ConfirmationDialogProvider>
+      <BrowserRouter>
+        <SessionTimeout />
+        <ScrollToTop />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/jobs" element={<JobVacancies />} />
+          <Route path="/employers" element={<Employers />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/auth/callback" element={<OAuthCallback />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/register" element={<JobSeekerRegistration />} />
+          <Route
+            path="/jobseekerregistration"
+            element={<JobSeekerRegistration />}
+          />
+          <Route
+            path="/admin"
+            element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>}
+          />
+          <Route
+            path="/staff"
+            element={<ProtectedRoute><StaffDashboard /></ProtectedRoute>}
+          />
+          <Route
+            path="/employer"
+            element={<ProtectedRoute><EmployerDashboard /></ProtectedRoute>}
+          />
+          <Route
+            path="/jobseeker"
+            element={<ProtectedRoute><JobSeekerDashboard /></ProtectedRoute>}
+          />
+          <Route path="*" element={<Home />} />
+        </Routes>
+        <PublicAIChatbot />
+      </BrowserRouter>
+    </ConfirmationDialogProvider>
   );
 }
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../services/supabase";
+import { useConfirmation } from "../components/ConfirmationDialog";
 
 type GmailSetupStatus = {
   connected: boolean;
@@ -19,6 +20,7 @@ type GmailSetupStatus = {
 };
 
 export default function GmailSetupModule() {
+  const confirm = useConfirmation();
   const [status, setStatus] = useState<GmailSetupStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [authorizing, setAuthorizing] = useState(false);
@@ -84,9 +86,9 @@ export default function GmailSetupModule() {
 
   const disconnect = async () => {
     if (
-      !window.confirm(
+      !(await confirm(
         "Log out and disconnect the official Gmail account from PESO-Hub? Gmail message sending and synchronization will stop.",
-      )
+      ))
     ) {
       return;
     }

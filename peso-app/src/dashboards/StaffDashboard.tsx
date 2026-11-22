@@ -27,6 +27,7 @@ import MessagesModule from "../adminmodules/MessagesModule";
 import PESOJobPostsModule from "../adminmodules/PESOJobPostsModule";
 import PESOPosts from "../adminmodules/PESOPosts";
 import { useUnreadMessages } from "../services/useUnreadMessages";
+import { useConfirmation } from "../components/ConfirmationDialog";
 
 type StaffPermission = {
   dashboard_overview: boolean;
@@ -94,6 +95,7 @@ type StaffApplication = {
 };
 
 export default function StaffDashboard() {
+  const confirm = useConfirmation();
   const [staff, setStaff] =
     useState<StaffAccount | null>(null);
   const hasUnreadMessages = useUnreadMessages(staff?.user_id);
@@ -426,7 +428,7 @@ export default function StaffDashboard() {
   ===================================================== */
 
   const handleLogout = async () => {
-    if (!window.confirm("Are you sure you want to log out?")) return;
+    if (!(await confirm("Are you sure you want to log out?"))) return;
 
     await supabase.auth.signOut();
 

@@ -8,6 +8,7 @@ import {
   getPasswordValidationError,
   PASSWORD_REQUIREMENTS_HELP_TEXT,
 } from "../utils/passwordValidation";
+import { useConfirmation } from "../components/ConfirmationDialog";
 
 type Staff = {
   peso_staff_id: string;
@@ -158,6 +159,7 @@ async function logStaffAccountCreation(
 }
 
 export default function AdminAccounts() {
+  const confirm = useConfirmation();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -630,7 +632,7 @@ export default function AdminAccounts() {
 
   const toggleStaffStatus = async (account: Staff) => {
     const nextIsActive = !account.is_active;
-    const confirmed = window.confirm(
+    const confirmed = await confirm(
       `${nextIsActive ? "Activate" : "Deactivate"} ${account.full_name}'s staff account? ${
         nextIsActive
           ? "They will be able to access the staff dashboard."

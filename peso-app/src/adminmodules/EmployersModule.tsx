@@ -11,6 +11,7 @@ import type {
   EmployerVerificationDocument,
 } from "../services/employerRegistration";
 import { getEmployerRegistrationChecklist } from "../services/employerRegistration";
+import { useConfirmation } from "../components/ConfirmationDialog";
 
 type Employer = {
   id?: string;
@@ -289,6 +290,7 @@ export default function EmployersModule({
   LoadingMessage,
   EmptyMessage,
 }: Props) {
+  const confirm = useConfirmation();
   const [openActionsEmployerId, setOpenActionsEmployerId] = useState<string | null>(null);
   const [actionsPosition, setActionsPosition] = useState<ActionsPosition | null>(null);
   const [detailsEmployer, setDetailsEmployer] = useState<Employer | null>(null);
@@ -452,7 +454,7 @@ export default function EmployersModule({
       employer.business_name ||
       "this employer";
     const nextIsActive = employer.is_active === false;
-    const confirmed = window.confirm(
+    const confirmed = await confirm(
       `${nextIsActive ? "Activate" : "Deactivate"} ${name}'s account? ${
         nextIsActive
           ? "They will be able to access their employer account."

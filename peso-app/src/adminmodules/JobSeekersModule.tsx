@@ -11,6 +11,7 @@ import {
   getIncompleteJobSeekerProfileSections,
   JOB_SEEKER_PROFILE_SECTION_TITLES,
 } from "../services/jobSeekerProfile";
+import { useConfirmation } from "../components/ConfirmationDialog";
 
 type JobSeeker = {
   id?: string;
@@ -296,6 +297,7 @@ export default function JobSeekersModule({
   LoadingMessage,
   EmptyMessage,
 }: Props) {
+  const confirm = useConfirmation();
   const [openActionsSeekerId, setOpenActionsSeekerId] = useState<string | null>(null);
   const [actionsPosition, setActionsPosition] = useState<ActionsPosition | null>(null);
   const [openingResumeId, setOpeningResumeId] = useState<string | null>(null);
@@ -418,7 +420,7 @@ export default function JobSeekersModule({
     const jobSeekerId = jobSeeker.job_seeker_id;
     if (!jobSeekerId) return;
     const nextIsActive = jobSeeker.is_active === false;
-    const confirmed = window.confirm(
+    const confirmed = await confirm(
       `${nextIsActive ? "Activate" : "Deactivate"} ${getSeekerName(jobSeeker)}'s account? ${
         nextIsActive
           ? "They will be able to access their job seeker account."

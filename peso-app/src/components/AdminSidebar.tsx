@@ -4,6 +4,7 @@ import SidebarToggle from "./SidebarToggle";
 import AppIcon from "./AppIcon";
 import ModuleIcon from "./ModuleIcon";
 import { supabase } from "../services/supabase";
+import { useConfirmation } from "./ConfirmationDialog";
 
 export type AdminModule =
   | "Dashboard"
@@ -33,6 +34,7 @@ export default function AdminSidebar({
   isAdmin,
   hasUnreadMessages,
 }: AdminSidebarProps) {
+  const confirm = useConfirmation();
   // Off-canvas below `lg`: a permanently fixed 256px column leaves no room
   // for content on a 320px phone.
   const [isOpen, setIsOpen] = useState(false);
@@ -88,7 +90,7 @@ export default function AdminSidebar({
   };
 
   const handleLogout = async () => {
-    if (!window.confirm("Are you sure you want to log out?")) return;
+    if (!(await confirm("Are you sure you want to log out?"))) return;
 
     await supabase.auth.signOut();
     window.location.replace("/");
