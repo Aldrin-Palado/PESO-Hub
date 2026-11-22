@@ -1413,11 +1413,6 @@ export default function JobSeekerDashboard() {
                 </div>
               </section>
             ))}
-            {!editingScreening && (
-              <p className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
-                Your data privacy consent and consent date are retained as originally recorded and cannot be changed from this editor.
-              </p>
-            )}
           </div>
 
         </form>}
