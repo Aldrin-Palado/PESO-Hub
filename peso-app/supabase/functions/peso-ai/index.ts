@@ -480,6 +480,41 @@ async function extractResumeText(resume: ChatResume) {
     : extractWordResumeText(resume);
 }
 
+function isLikelyResume(fileName: string, text: string) {
+  if (/\b(?:script|speech|presentation|thesis|essay|report|proposal)\b/i.test(fileName)) {
+    return false;
+  }
+
+  if (/\b(?:speaker script|defense presentation|thesis defense|thank you for listening)\b/i.test(text)) {
+    return false;
+  }
+
+  const resumeSections = [
+    /\b(?:professional|work|employment) (?:experience|history)\b/i,
+    /\b(?:education(?:al background)?|academic background)\b/i,
+    /\b(?:technical|core|key)?\s*skills\b/i,
+    /\bcertifications?\b/i,
+    /\bprojects?\b/i,
+    /\b(?:professional )?summary\b/i,
+    /\bcareer objective\b/i,
+    /\bprofessional profile\b/i,
+    /\bqualifications\b/i,
+  ];
+  const sectionCount = resumeSections.filter((pattern) => pattern.test(text)).length;
+  const hasContact = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(text) ||
+    /\blinkedin\.com\/in\//i.test(text) ||
+    (text.match(/\+?\d[\d\s().-]{7,}\d/g) ?? []).some((phone) => {
+      const digitCount = phone.replace(/\D/g, "").length;
+      return digitCount >= 10 && digitCount <= 15;
+    });
+  const hasDateRange = /\b(?:19|20)\d{2}\s*(?:-|–|—|to)\s*(?:(?:19|20)\d{2}|present|current)\b/i.test(text);
+  const namesResume = /\b(?:resume|résumé|curriculum vitae)\b/i.test(fileName);
+
+  return (hasContact && sectionCount >= 1) ||
+    (sectionCount >= 2 && (hasDateRange || namesResume)) ||
+    sectionCount >= 3;
+}
+
 async function handleChat(
   supabase: SupabaseClient,
   body: Record<string, unknown>,
@@ -637,6 +672,9 @@ async function handleJobMatches(
   const resume =
     body.resume === undefined ? null : await decodeChatResume(body.resume);
   const resumeText = resume ? await extractResumeText(resume) : null;
+  if (resume && resumeText && !isLikelyResume(resume.fileName, resumeText)) {
+    throw new Error("This document doesn't appear to be a resume. Please upload a resume to get job recommendations.");
+  }
 
   let profileText = "";
   if (!resume) {
