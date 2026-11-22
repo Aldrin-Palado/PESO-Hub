@@ -335,6 +335,53 @@ function isScreeningFieldVisible(
   return true;
 }
 
+function hasScreeningValue(value: ScreeningValue | undefined): boolean {
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "string") return value.trim().length > 0;
+  return value !== null && value !== undefined;
+}
+
+function isScreeningFieldRequired(
+  field: ScreeningField,
+  details: ScreeningDetails,
+): boolean {
+  if (field.key === "otherWorkLocation") {
+    return details.preferredWorkLocation === "Other";
+  }
+  if (field.key === "languages" || field.key === "noWorkExperience") return true;
+  if (field.key === "workExperience1") {
+    return details.noWorkExperience !== true;
+  }
+  return Boolean(field.required);
+}
+
+function isMissingScreeningField(
+  field: ScreeningField,
+  value: ScreeningValue | undefined,
+  details: ScreeningDetails,
+): boolean {
+  if (field.key === "privacyConsent") return value !== true;
+  if (field.key === "languages") {
+    return (
+      !hasScreeningValue(value) &&
+      !hasScreeningValue(details.otherLanguage)
+    );
+  }
+  if (field.key === "noWorkExperience") {
+    return (
+      !hasScreeningValue(value) &&
+      !hasScreeningValue(details.workExperience1)
+    );
+  }
+  if (field.key === "workExperience1") {
+    return (
+      details.noWorkExperience !== true &&
+      !hasScreeningValue(value)
+    );
+  }
+  return isScreeningFieldRequired(field, details) && !hasScreeningValue(value);
+}
+
 function parseScreeningDetails(value: unknown): ScreeningDetails {
   let details = value;
   if (typeof details === "string") {
@@ -1249,19 +1296,33 @@ export default function JobSeekerDashboard() {
                       : typeof rawValue === "boolean"
                         ? rawValue ? "Yes" : "No"
                         : String(rawValue ?? "").trim() || "Not provided";
-                    const controlClass =
-                      "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100";
+                    const isMissingRequiredValue =
+                      editingScreening &&
+                      isMissingScreeningField(field, rawValue, fieldValues);
+                    const isRequiredField = isScreeningFieldRequired(
+                      field,
+                      fieldValues,
+                    );
+                    const controlClass = `mt-1 w-full rounded-lg border px-3 py-2 text-sm text-slate-800 outline-none focus:ring-2 disabled:bg-slate-100 ${
+                      isMissingRequiredValue
+                        ? "border-red-500 bg-red-50 focus:border-red-500 focus:ring-red-100"
+                        : "border-slate-300 bg-white focus:border-blue-500 focus:ring-blue-100"
+                    }`;
 
                     return (
                       <div
                         key={field.key}
-                        className={`rounded-xl bg-slate-50 p-4 ${field.type === "checkboxes" || field.type === "checkbox" || field.key === "signature" ? "sm:col-span-2" : ""}`}
+                        className={`rounded-xl p-4 ${
+                          isMissingRequiredValue
+                            ? "border border-red-300 bg-red-50"
+                            : "bg-slate-50"
+                        } ${field.type === "checkboxes" || field.type === "checkbox" || field.key === "signature" ? "sm:col-span-2" : ""}`}
                       >
                         {editingScreening ? (
                           field.key === "signature" ? (
                             <div className="block text-xs font-bold uppercase tracking-wide text-slate-500">
                               {field.label}
-                              {field.required && <span className="text-red-600"> *</span>}
+                              {isRequiredField && <span className="text-red-600"> *</span>}
                               {field.hint && (
                                 <span className="mt-1 block text-xs font-normal normal-case tracking-normal text-slate-500">
                                   {field.hint}
@@ -1291,23 +1352,28 @@ export default function JobSeekerDashboard() {
                                 type="checkbox"
                                 checked={rawValue === true}
                                 disabled={savingScreening}
+                                aria-invalid={isMissingRequiredValue || undefined}
                                 onChange={(event) =>
                                   setScreeningForm({
                                     ...screeningForm,
                                     [field.key]: event.target.checked,
                                   })
                                 }
-                                className="h-4 w-4 rounded border-slate-300 accent-[#0759AE]"
+                                className={`h-4 w-4 rounded border-slate-300 ${
+                                  isMissingRequiredValue
+                                    ? "accent-red-600"
+                                    : "accent-[#0759AE]"
+                                }`}
                               />
                               <span>
                                 {field.label}
-                                {field.required && <span className="text-red-600"> *</span>}
+                                {isRequiredField && <span className="text-red-600"> *</span>}
                               </span>
                             </label>
                           ) : (
                             <label className="block text-xs font-bold uppercase tracking-wide text-slate-500">
                               {field.label}
-                              {field.required && <span className="text-red-600"> *</span>}
+                              {isRequiredField && <span className="text-red-600"> *</span>}
                               {field.type === "checkboxes" ? (
                                 <span className="mt-2 grid gap-2 sm:grid-cols-3">
                                   {field.options?.map((option) => {
@@ -1320,6 +1386,7 @@ export default function JobSeekerDashboard() {
                                           type="checkbox"
                                           checked={selectedLanguages.includes(option)}
                                           disabled={savingScreening}
+                                          aria-invalid={isMissingRequiredValue || undefined}
                                           onChange={(event) =>
                                             setScreeningForm({
                                               ...screeningForm,
@@ -1328,7 +1395,11 @@ export default function JobSeekerDashboard() {
                                                 : selectedLanguages.filter((language) => language !== option),
                                             })
                                           }
-                                          className="h-4 w-4 rounded border-slate-300 accent-[#0759AE]"
+                                          className={`h-4 w-4 rounded border-slate-300 ${
+                                            isMissingRequiredValue
+                                              ? "accent-red-600"
+                                              : "accent-[#0759AE]"
+                                          }`}
                                         />
                                         {option}
                                       </span>
@@ -1340,6 +1411,7 @@ export default function JobSeekerDashboard() {
                                   rows={3}
                                   value={String(rawValue ?? "")}
                                   disabled={savingScreening}
+                                  aria-invalid={isMissingRequiredValue || undefined}
                                   onChange={(event) =>
                                     setScreeningForm({
                                       ...screeningForm,
@@ -1352,6 +1424,7 @@ export default function JobSeekerDashboard() {
                                 <select
                                   value={String(rawValue ?? "")}
                                   disabled={savingScreening}
+                                  aria-invalid={isMissingRequiredValue || undefined}
                                   onChange={(event) =>
                                     setScreeningForm({
                                       ...screeningForm,
@@ -1373,6 +1446,7 @@ export default function JobSeekerDashboard() {
                                   type={field.type || "text"}
                                   value={String(rawValue ?? "")}
                                   disabled={savingScreening}
+                                  aria-invalid={isMissingRequiredValue || undefined}
                                   onChange={(event) =>
                                     setScreeningForm({
                                       ...screeningForm,
