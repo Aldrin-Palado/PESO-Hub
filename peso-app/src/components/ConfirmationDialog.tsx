@@ -101,14 +101,8 @@ export function ConfirmationDialogProvider({
               }
             }}
           >
-            <div className="mb-5 flex items-start gap-4">
-              <span
-                aria-hidden="true"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xl font-bold text-[#315FEA]"
-              >
-                ?
-              </span>
-              <div className="min-w-0 pt-0.5">
+            <div className="mb-5">
+              <div className="min-w-0">
                 <h2
                   id="confirmation-title"
                   className="text-lg font-bold text-slate-900"
