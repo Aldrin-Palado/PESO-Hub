@@ -1420,29 +1420,6 @@ export default function JobSeekerDashboard() {
             )}
           </div>
 
-          {editingScreening && (
-            <div className="flex justify-end gap-3 border-t border-slate-100 px-6 py-5">
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingScreening(false);
-                  setEditingResume(false);
-                  setResumeFile(null);
-                }}
-                disabled={savingScreening}
-                className="rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={savingScreening}
-                className="rounded-full bg-[#0759AE] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#064A91] disabled:cursor-wait disabled:opacity-60"
-              >
-                {savingScreening ? "Saving..." : "Save Screening Details"}
-              </button>
-            </div>
-          )}
         </form>}
 
           {screeningDetailsOpen && (
@@ -1547,6 +1524,31 @@ export default function JobSeekerDashboard() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {editingScreening && (
+            <div className="mt-6 flex justify-end gap-3 border-t border-slate-100 px-6 py-5">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingScreening(false);
+                  setEditingResume(false);
+                  setResumeFile(null);
+                }}
+                disabled={savingScreening}
+                className="rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="job-seeker-registration-details"
+                disabled={savingScreening}
+                className="rounded-full bg-[#0759AE] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#064A91] disabled:cursor-wait disabled:opacity-60"
+              >
+                {savingScreening ? "Saving..." : "Save Screening Details"}
+              </button>
             </div>
           )}
 
