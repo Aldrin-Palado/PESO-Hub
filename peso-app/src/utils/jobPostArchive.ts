@@ -20,14 +20,14 @@ function addOneMonth(dateString: string): Date | null {
 export function isJobPostArchived(job: JobPostArchiveFields): boolean {
   if (job.archived_at) return true;
 
-  if (job.archive_after) {
+  if (typeof job.archive_after === "string" && job.archive_after) {
     const archiveDate = new Date(job.archive_after);
-    if (!Number.isNaNaN(archiveDate.getTime())) {
+    if (!Number.isNaN(archiveDate.getTime())) {
       return archiveDate.getTime() <= Date.now();
     }
   }
 
-  if (!job.deadline) return false;
+  if (typeof job.deadline !== "string" || !job.deadline) return false;
   const archiveDate = addOneMonth(job.deadline.slice(0, 10));
   return archiveDate !== null && archiveDate.getTime() <= Date.now();
 }

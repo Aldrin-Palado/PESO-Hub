@@ -94,8 +94,8 @@ type BulletListTextareaProps = Omit<
   onChange: (value: string) => void;
 };
 
-function formatBulletList(value: string) {
-  return value
+function formatBulletList(value: unknown) {
+  return (typeof value === "string" ? value : "")
     .split(/\r?\n/)
     .map((line) => {
       if (/^\s*(?:•|-|\*)\s*$/.test(line)) return "• ";
@@ -109,7 +109,7 @@ function toTextValue(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-function getSavedBulletList(value: string) {
+function getSavedBulletList(value: unknown) {
   const formatted = formatBulletList(value)
     .split("\n")
     .filter((line) => line.trim() && line.trim() !== "•")
@@ -695,8 +695,8 @@ export default function MyJobPostModule({
 
   // FORMAT DATE
 
-  const formatDate = (date: string | null) => {
-    if (!date) return "Not specified";
+  const formatDate = (date: unknown) => {
+    if (typeof date !== "string" || !date) return "Not specified";
 
     return new Date(date).toLocaleDateString("en-PH", {
       year: "numeric",
@@ -1017,7 +1017,11 @@ export default function MyJobPostModule({
       job.description,
       job.job_qualifications,
       job.requirements,
-    ].some((value) => value?.toLowerCase().includes(normalizedJobSearch));
+    ].some((value) =>
+      typeof value === "string"
+        ? value.toLowerCase().includes(normalizedJobSearch)
+        : false
+    );
   });
 
   return (
@@ -1135,7 +1139,9 @@ export default function MyJobPostModule({
                       className="h-full w-full object-contain p-1"
                     />
                   ) : (
-                    employerName.trim().charAt(0).toUpperCase() || "E"
+                    (typeof employerName === "string"
+                      ? employerName.trim().charAt(0).toUpperCase()
+                      : "") || "E"
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -1170,7 +1176,9 @@ export default function MyJobPostModule({
                 </p>
                 <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-600">
                   <span className="font-semibold text-slate-700">Application requirements: </span>
-                  {job.requirements?.trim() || "Not specified"}
+                  {typeof job.requirements === "string"
+                    ? job.requirements.trim() || "Not specified"
+                    : "Not specified"}
                 </p>
               </div>
 

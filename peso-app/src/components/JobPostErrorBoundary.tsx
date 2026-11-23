@@ -6,13 +6,17 @@ type Props = {
 
 type State = {
   hasError: boolean;
+  errorMessage: string;
 };
 
 export default class JobPostErrorBoundary extends Component<Props, State> {
-  state: State = { hasError: false };
+  state: State = { hasError: false, errorMessage: "" };
 
-  static getDerivedStateFromError(): State {
-    return { hasError: true };
+  static getDerivedStateFromError(error: Error): State {
+    return {
+      hasError: true,
+      errorMessage: error?.message || "Unknown Job Post module error",
+    };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
@@ -32,6 +36,11 @@ export default class JobPostErrorBoundary extends Component<Props, State> {
           <p className="mt-2 text-sm text-red-700">
             Please refresh the page or try again. Your data has not been removed.
           </p>
+          {import.meta.env.DEV && (
+            <p className="mx-auto mt-3 max-w-2xl break-words rounded-lg bg-white/70 px-3 py-2 font-mono text-xs text-red-700">
+              {this.state.errorMessage}
+            </p>
+          )}
           <button
             type="button"
             onClick={() => window.location.reload()}
