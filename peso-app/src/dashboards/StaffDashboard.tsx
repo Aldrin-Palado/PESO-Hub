@@ -28,6 +28,10 @@ import PESOJobPostsModule from "../adminmodules/PESOJobPostsModule";
 import PESOPosts from "../adminmodules/PESOPosts";
 import { useUnreadMessages } from "../services/useUnreadMessages";
 import { useConfirmation } from "../components/ConfirmationDialog";
+import {
+  getPasswordValidationError,
+  PASSWORD_REQUIREMENTS_HELP_TEXT,
+} from "../utils/passwordValidation";
 
 type StaffPermission = {
   dashboard_overview: boolean;
@@ -140,8 +144,24 @@ export default function StaffDashboard() {
     setIsSidebarOpen(false);
   };
 
-  const saveStaffProfile = async (values: Pick<StaffAccount, "full_name" | "contact_no">) => {
+  const saveStaffProfile = async (
+    values: Pick<StaffAccount, "full_name" | "contact_no"> & {
+      password?: string;
+    },
+  ) => {
     if (!staff) throw new Error("Your staff profile is not loaded.");
+
+    if (values.password) {
+      const passwordError = getPasswordValidationError(values.password);
+      if (passwordError) throw new Error(passwordError);
+
+      const { error: passwordUpdateError } =
+        await supabase.auth.updateUser({
+          password: values.password,
+        });
+      if (passwordUpdateError) throw passwordUpdateError;
+    }
+
     const { data, error } = await supabase
       .from("peso_staff")
       .update({
@@ -1679,7 +1699,11 @@ function MyProfile({
   onSave,
 }: {
   staff: StaffAccount;
-  onSave: (values: Pick<StaffAccount, "full_name" | "contact_no">) => Promise<void>;
+  onSave: (
+    values: Pick<StaffAccount, "full_name" | "contact_no"> & {
+      password?: string;
+    },
+  ) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1687,14 +1711,37 @@ function MyProfile({
   const [form, setForm] = useState({
     full_name: staff.full_name,
     contact_no: staff.contact_no ?? "",
+    new_password: "",
+    confirm_password: "",
   });
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (form.new_password || form.confirm_password) {
+      if (form.new_password !== form.confirm_password) {
+        setError("Passwords do not match.");
+        return;
+      }
+      const passwordError = getPasswordValidationError(form.new_password);
+      if (passwordError) {
+        setError(passwordError);
+        return;
+      }
+    }
+
     setSaving(true);
     setError("");
     try {
-      await onSave(form);
+      await onSave({
+        full_name: form.full_name,
+        contact_no: form.contact_no,
+        password: form.new_password || undefined,
+      });
+      setForm((current) => ({
+        ...current,
+        new_password: "",
+        confirm_password: "",
+      }));
       setEditing(false);
     } catch (saveError) {
       console.error("Staff profile update error:", saveError);
@@ -1801,6 +1848,44 @@ function MyProfile({
           </label>
 
           {editing && (
+            <>
+              <label className="block text-sm font-bold text-slate-700">
+                New Password
+                <input
+                  type="password"
+                  value={form.new_password}
+                  onChange={(event) =>
+                    setForm({ ...form, new_password: event.target.value })
+                  }
+                  autoComplete="new-password"
+                  placeholder="Leave blank to keep current password"
+                  disabled={saving}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-normal text-slate-700 outline-none transition focus:border-[#0446A7] focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
+                />
+              </label>
+
+              <label className="block text-sm font-bold text-slate-700">
+                Confirm New Password
+                <input
+                  type="password"
+                  value={form.confirm_password}
+                  onChange={(event) =>
+                    setForm({ ...form, confirm_password: event.target.value })
+                  }
+                  autoComplete="new-password"
+                  placeholder="Re-enter new password"
+                  disabled={saving}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-normal text-slate-700 outline-none transition focus:border-[#0446A7] focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
+                />
+              </label>
+
+              <p className="text-xs text-slate-500 sm:col-span-2">
+                {PASSWORD_REQUIREMENTS_HELP_TEXT}
+              </p>
+            </>
+          )}
+
+          {editing && (
             <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-5 sm:col-span-2">
               <button
                 type="button"
@@ -1808,6 +1893,8 @@ function MyProfile({
                   setForm({
                     full_name: staff.full_name,
                     contact_no: staff.contact_no ?? "",
+                    new_password: "",
+                    confirm_password: "",
                   });
                   setError("");
                   setEditing(false);

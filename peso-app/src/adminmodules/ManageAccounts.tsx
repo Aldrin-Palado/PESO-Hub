@@ -23,6 +23,8 @@ type Staff = {
 type StaffFormValues = {
   full_name: string;
   contact_no: string;
+  new_password: string;
+  confirm_password: string;
 };
 
 type StaffStatusFilter = "all" | "active" | "deactivated";
@@ -593,6 +595,8 @@ export default function AdminAccounts() {
     setEditForm({
       full_name: account.full_name,
       contact_no: account.contact_no || "",
+      new_password: "",
+      confirm_password: "",
     });
   };
 
@@ -601,6 +605,18 @@ export default function AdminAccounts() {
   ) => {
     event.preventDefault();
     if (!editingStaff || !editForm) return;
+
+    if (editForm.new_password || editForm.confirm_password) {
+      if (editForm.new_password !== editForm.confirm_password) {
+        setActionError("Passwords do not match.");
+        return;
+      }
+      const passwordError = getPasswordValidationError(editForm.new_password);
+      if (passwordError) {
+        setActionError(passwordError);
+        return;
+      }
+    }
 
     setSavingStaff(true);
     setActionError("");
@@ -622,6 +638,30 @@ export default function AdminAccounts() {
       );
       setSavingStaff(false);
       return;
+    }
+
+    if (editForm.new_password) {
+      const { data: passwordData, error: passwordError } =
+        await supabase.functions.invoke("update-staff-account", {
+          body: {
+            staff_user_id: editingStaff.user_id,
+            new_password: editForm.new_password,
+          },
+        });
+      if (passwordError) {
+        setActionError(
+          passwordError.message || "The staff profile was updated, but the password could not be changed.",
+        );
+        setSavingStaff(false);
+        await loadStaff();
+        return;
+      }
+      if (!passwordData?.success) {
+        setActionError("The staff profile was updated, but the password could not be changed.");
+        setSavingStaff(false);
+        await loadStaff();
+        return;
+      }
     }
 
     setEditingStaff(null);
@@ -930,6 +970,48 @@ export default function AdminAccounts() {
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
               />
             </label>
+
+            <label className="block text-xs font-semibold text-slate-600">
+              New Password
+              <input
+                type="password"
+                value={editForm?.new_password ?? ""}
+                onChange={(event) =>
+                  setEditForm((current) =>
+                    current
+                      ? { ...current, new_password: event.target.value }
+                      : current,
+                  )
+                }
+                autoComplete="new-password"
+                placeholder="Leave blank to keep current password"
+                disabled={savingStaff}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
+              />
+            </label>
+
+            <label className="block text-xs font-semibold text-slate-600">
+              Confirm New Password
+              <input
+                type="password"
+                value={editForm?.confirm_password ?? ""}
+                onChange={(event) =>
+                  setEditForm((current) =>
+                    current
+                      ? { ...current, confirm_password: event.target.value }
+                      : current,
+                  )
+                }
+                autoComplete="new-password"
+                placeholder="Re-enter new password"
+                disabled={savingStaff}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
+              />
+            </label>
+
+            <p className="text-[10px] text-slate-400">
+              {PASSWORD_REQUIREMENTS_HELP_TEXT}
+            </p>
           </div>
 
           <fieldset className="mt-4 border-t border-slate-100 pt-4">
