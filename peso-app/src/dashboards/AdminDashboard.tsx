@@ -201,6 +201,7 @@ export default function AdminDashboard() {
 
   const [activePage, setActivePage] =
     useState<AdminModule | "My Profile">("Dashboard");
+  const initialModuleRedirectApplied = useRef(false);
   const { logs: auditLogs, loadError: auditLogError } = useAdminAuditLogs(
     account?.role === "admin" &&
       (activePage === "Admin Audit Logs" || activePage === "Dashboard"),
@@ -652,6 +653,19 @@ export default function AdminDashboard() {
 
     return result;
   };
+
+  useEffect(() => {
+    if (
+      !account ||
+      account.role !== "staff" ||
+      initialModuleRedirectApplied.current
+    ) {
+      return;
+    }
+
+    initialModuleRedirectApplied.current = true;
+    setActivePage(permissions[0] ?? "My Profile");
+  }, [account, permissions]);
 
   /* ============================================================
      ACCESS CHECK

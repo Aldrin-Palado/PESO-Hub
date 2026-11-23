@@ -107,6 +107,7 @@ export default function StaffDashboard() {
     useState<ModuleName | "My Profile">(
       "My Profile"
     );
+  const initialModuleRedirectApplied = useRef(false);
 
   const [loading, setLoading] =
     useState(true);
@@ -407,6 +408,56 @@ export default function StaffDashboard() {
         return false;
     }
   };
+
+  useEffect(() => {
+    if (
+      !staff ||
+      !permissions ||
+      initialModuleRedirectApplied.current
+    ) {
+      return;
+    }
+
+    const modulesInPermissionOrder: ModuleName[] = [
+      "Dashboard Overview",
+      "Analytics",
+      "Job Posts",
+      "Job Application",
+      "Employers",
+      "Job Seekers",
+      "Messages",
+      "PESO Posts",
+    ];
+    const firstPermittedModule = modulesInPermissionOrder.find(
+      (module) => {
+        switch (module) {
+          case "Dashboard Overview":
+            return permissions.dashboard_overview;
+          case "Analytics":
+            return permissions.analytics;
+          case "Job Posts":
+            return permissions.job_posts;
+          case "Job Application":
+            return permissions.job_application;
+          case "Employers":
+            return permissions.employers;
+          case "Job Seekers":
+            return permissions.job_seekers;
+          case "Messages":
+            return permissions.messages;
+          case "PESO Posts":
+            return permissions.peso_posts;
+          default:
+            return false;
+        }
+      },
+    );
+
+    initialModuleRedirectApplied.current = true;
+    if (firstPermittedModule) {
+      setActivePage(firstPermittedModule);
+    }
+  }, [staff, permissions]);
 
   /* =====================================================
      MODULE LIST
