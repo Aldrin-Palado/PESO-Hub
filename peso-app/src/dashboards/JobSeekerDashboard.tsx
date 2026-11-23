@@ -1836,6 +1836,10 @@ export default function JobSeekerDashboard() {
           <SavedJobsModule
             seeker={seeker}
             onNavigateToJobs={() => handlePageChange("Jobs")}
+            onApplyJob={(jobId) => {
+              setPendingApplicationJobId(jobId);
+              handlePageChange("Jobs");
+            }}
           />
         );
 

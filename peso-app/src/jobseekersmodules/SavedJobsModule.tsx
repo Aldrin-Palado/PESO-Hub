@@ -33,11 +33,13 @@ type Job = {
 type Props = {
   seeker: Seeker;
   onNavigateToJobs: () => void;
+  onApplyJob: (jobId: string) => void;
 };
 
 export default function SavedJobsModule({
   seeker,
   onNavigateToJobs,
+  onApplyJob,
 }: Props) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -263,95 +265,110 @@ export default function SavedJobsModule({
               return (
                 <article
                   key={job.id}
-                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+                  className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:border-blue-200 hover:shadow-md"
                 >
-                  <div className="p-5 sm:p-7">
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-black text-white ${
-                          job.isPeso ? "bg-white" : "bg-[#0759AE]"
-                        }`}
-                      >
-                        {job.companyLogoUrl ? (
-                          <img
-                            src={job.companyLogoUrl}
-                            alt={`${job.company} logo`}
-                            className={`h-full w-full ${
-                              job.isPeso ? "object-contain" : "object-cover"
-                            }`}
-                          />
-                        ) : (
-                          job.company.charAt(0).toUpperCase()
-                        )}
+                  <div className="px-5 pb-5 pt-5 sm:px-7">
+                    <div className="flex flex-wrap items-start gap-3">
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <div
+                          className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-black text-white ${
+                            job.isPeso ? "bg-white" : "bg-[#0759AE]"
+                          }`}
+                        >
+                          {job.companyLogoUrl ? (
+                            <img
+                              src={job.companyLogoUrl}
+                              alt={`${job.company} logo`}
+                              className={`h-full w-full ${
+                                job.isPeso ? "object-contain" : "object-cover"
+                              }`}
+                            />
+                          ) : (
+                            job.company.charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <p className="flex min-w-0 items-center gap-1.5 text-base font-semibold text-slate-700 sm:text-lg">
+                          <span className="truncate">{job.company}</span>
+                          {job.isPeso ? (
+                            <OfficialPESOBadge />
+                          ) : job.employerVerified ? (
+                            <span
+                              title="Verified employer"
+                              className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white"
+                            >
+                              <AppIcon name="check" className="h-3 w-3" />
+                            </span>
+                          ) : null}
+                        </p>
                       </div>
-
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-slate-400">
+                      <div className="w-full text-center sm:w-40 sm:self-center sm:text-right">
+                        <p className="text-[11px] font-medium text-slate-400">
                           {postedDate}
                         </p>
-                        <p className="mt-1 flex items-center gap-1.5 truncate text-sm font-semibold text-slate-700">
-                          {job.company}
-                          {job.isPeso && <OfficialPESOBadge />}
-                        </p>
-                        <h3 className="mt-2 text-lg font-black text-slate-950">
-                          {job.title}
-                        </h3>
-
-                        <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-xs text-slate-500">
-                          <span className="capitalize">{job.classification}</span>
-                          <span aria-hidden="true">·</span>
-                          <span>{job.type}</span>
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-600">
-                          <span className="inline-flex items-center gap-1.5">
-                            <AppIcon
-                              name="dollar"
-                              className="h-4 w-4 text-slate-500"
-                            />
-                            {job.salary}
-                          </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <AppIcon
-                              name="mapPin"
-                              className="h-4 w-4 text-slate-500"
-                            />
-                            {job.location}
-                          </span>
-                        </div>
                       </div>
+                    </div>
+                    <h3 className="mt-3 text-lg font-black leading-snug text-slate-950 sm:text-xl">
+                      {job.title}
+                    </h3>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                      <span className="capitalize">{job.classification}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{job.type}</span>
+                    </div>
+                    <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+                      <AppIcon name="mapPin" className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                      {job.location}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs font-medium text-slate-600">
+                      <span className="inline-flex items-center gap-1.5">
+                        <AppIcon name="dollar" className="h-3.5 w-3.5 text-slate-500" />
+                        {job.salary}
+                      </span>
                     </div>
                   </div>
 
                   {job.imageUrl && (
-                    <div className="border-y border-slate-100 bg-slate-50">
+                    <div className="overflow-hidden border-y border-slate-100 bg-slate-50">
                       <img
                         src={job.imageUrl}
                         alt={`${job.title} job posting`}
-                        className="max-h-64 w-full object-contain"
+                        className="h-56 w-full object-contain sm:h-72"
                         loading="lazy"
                       />
                     </div>
                   )}
 
                   <div className="flex flex-col gap-3 bg-slate-50/80 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+                    <p className="text-xs text-slate-500">
+                      Online application via portal.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => setSelectedJob(job)}
-                      className="rounded-full bg-[#0759AE] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#064A91]"
+                      className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
                     >
                       View Details
                     </button>
-
+                    <button
+                      type="button"
+                      onClick={() => onApplyJob(job.id)}
+                      className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0759AE] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#064A91]"
+                    >
+                      Apply
+                      <AppIcon name="arrowRight" className="h-4 w-4" />
+                    </button>
                     <button
                       type="button"
                       onClick={() => void removeSavedJob(job.id)}
                       disabled={removingJobId !== null}
-                      className="inline-flex items-center justify-center gap-2 rounded-full border border-red-200 bg-white px-5 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
+                      aria-label={`Remove ${job.title} from saved jobs`}
+                      className="inline-flex items-center justify-center gap-1 rounded-full border border-yellow-300 bg-yellow-50 px-4 py-2.5 text-sm font-semibold text-yellow-700 transition hover:bg-yellow-100 disabled:cursor-wait disabled:opacity-60"
                     >
                       <AppIcon name="star" className="h-4 w-4 fill-current" />
-                      {removingJobId === job.id ? "Removing..." : "Remove Saved"}
+                      {removingJobId === job.id ? "Removing..." : "Saved"}
                     </button>
+                    </div>
                   </div>
                 </article>
               );
@@ -383,10 +400,11 @@ export default function SavedJobsModule({
           }}
           onClose={() => setSelectedJob(null)}
           onAction={() => {
+            const jobId = selectedJob.id;
             setSelectedJob(null);
-            onNavigateToJobs();
+            onApplyJob(jobId);
           }}
-          actionLabel="Go to Jobs"
+          actionLabel="Apply"
         />
       )}
     </div>
