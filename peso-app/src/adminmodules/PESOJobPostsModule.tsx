@@ -100,7 +100,7 @@ export default function PESOJobPostsModule() {
             return;
           }
 
-          if (payload.new.employer_id === employerId) {
+          if (payload.new && payload.new.employer_id === employerId) {
             void loadJobs();
           }
         },

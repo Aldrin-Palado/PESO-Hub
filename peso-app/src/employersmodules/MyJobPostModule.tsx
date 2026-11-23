@@ -105,6 +105,10 @@ function formatBulletList(value: string) {
     .join("\n");
 }
 
+function toTextValue(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 function getSavedBulletList(value: string) {
   const formatted = formatBulletList(value)
     .split("\n")
@@ -255,8 +259,8 @@ export default function MyJobPostModule({
     setForm({
       position_title: job.position_title ?? "",
       description: job.description ?? "",
-      job_qualifications: formatBulletList(job.job_qualifications ?? ""),
-      requirements: formatBulletList(job.requirements ?? ""),
+      job_qualifications: formatBulletList(toTextValue(job.job_qualifications)),
+      requirements: formatBulletList(toTextValue(job.requirements)),
       location: job.location ?? "",
       employment_type: job.employment_type ?? "Full-time",
       job_classification: job.job_classification ?? "local",

@@ -40,6 +40,7 @@ import {
 } from "../services/applicationDecisions";
 import { getEmployerRegistrationChecklist } from "../services/employerRegistration";
 import { isJobSeekerProfileComplete } from "../services/jobSeekerProfile";
+import JobPostErrorBoundary from "../components/JobPostErrorBoundary";
 import { fetchAnalyticsData } from "../services/analyticsData";
 import { useUnreadMessages } from "../services/useUnreadMessages";
 import {
@@ -2094,19 +2095,21 @@ export default function AdminDashboard() {
 
       case "Job Post":
         return (
-          <AdminJobPostsModule
-            jobs={jobPosts}
-            loadError={moduleError}
-            search={jobSearch}
-            setSearch={setJobSearch}
-            statusFilter={jobStatusFilter}
-            setStatusFilter={setJobStatusFilter}
-            loading={moduleLoading}
-            StatusBadge={StatusBadge}
-            LoadingMessage={LoadingMessage}
-            EmptyMessage={EmptyMessage}
-            formatDate={formatDate}
-          />
+          <JobPostErrorBoundary>
+            <AdminJobPostsModule
+              jobs={jobPosts}
+              loadError={moduleError}
+              search={jobSearch}
+              setSearch={setJobSearch}
+              statusFilter={jobStatusFilter}
+              setStatusFilter={setJobStatusFilter}
+              loading={moduleLoading}
+              StatusBadge={StatusBadge}
+              LoadingMessage={LoadingMessage}
+              EmptyMessage={EmptyMessage}
+              formatDate={formatDate}
+            />
+          </JobPostErrorBoundary>
         );
 
       /* ========================================================
