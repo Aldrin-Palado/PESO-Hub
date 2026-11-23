@@ -1692,7 +1692,7 @@ export default function AdminDashboard() {
           supabase
             .from("job_seeker")
             .select(
-              "job_seeker_id, full_name, email, contact_no, address, resume_url, created_at, registration_details, birth_date, is_active",
+              "job_seeker_id, user_id, full_name, email, contact_no, address, resume_url, created_at, registration_details, birth_date, is_active",
             )
             .order("created_at", {
               ascending: false,

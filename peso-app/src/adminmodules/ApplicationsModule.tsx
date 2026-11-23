@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { openStoredResume } from "../services/resumes";
+import { getResumeFileName, openStoredResume } from "../services/resumes";
 import type { ApplicationDecisionResult } from "../services/applicationDecisions";
 import ApplicationScopeToggle from "../components/ApplicationScopeToggle";
 import ApplicationArchiveTabs from "../components/ApplicationArchiveTabs";
@@ -38,6 +38,7 @@ type Application = {
   contact_number?: string | null;
   applicant_address?: string | null;
   resume_url?: string | null;
+  applicant_qualification_files?: { name: string; path: string }[] | null;
   can_update_status?: boolean;
   [key: string]: any;
 };
@@ -159,6 +160,7 @@ export default function ApplicationsModule({
   const [actionError, setActionError] = useState("");
   const [resumeError, setResumeError] = useState("");
   const [openingResumeId, setOpeningResumeId] = useState<string | null>(null);
+  const [openingDocumentPath, setOpeningDocumentPath] = useState<string | null>(null);
 
   const scopedApplications = useMemo(
     () =>
@@ -366,6 +368,25 @@ export default function ApplicationsModule({
       );
     } finally {
       setOpeningResumeId(null);
+    }
+  };
+
+  const openApplicationDocument = async (
+    document: { name: string; path: string },
+  ) => {
+    setOpeningDocumentPath(document.path);
+    setResumeError("");
+    try {
+      await openStoredResume(document.path);
+    } catch (error) {
+      console.error("Application document view error:", error);
+      setResumeError(
+        error instanceof Error
+          ? error.message
+          : "Unable to open this application document.",
+      );
+    } finally {
+      setOpeningDocumentPath(null);
     }
   };
 
@@ -746,39 +767,107 @@ export default function ApplicationsModule({
             role="dialog"
             aria-modal="true"
             aria-labelledby="application-details-title"
-            className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white p-5 shadow-xl"
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
           >
-            <div className="flex items-start justify-between gap-4">
+            <header className="flex items-start justify-between gap-4 border-b border-slate-100 p-5 sm:p-6">
               <div>
-                <h2 id="application-details-title" className="text-base font-bold text-slate-800">
+                <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
                   Application details
-                </h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  {selectedApplication.applicant_name || "Applicant"} · {selectedApplication.position_title || "Position not specified"}
                 </p>
+                <h2 id="application-details-title" className="mt-1 text-xl font-bold text-slate-900">
+                  {selectedApplication.position_title || "Position not specified"}
+                </h2>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedApplication(null)}
                 aria-label="Close application details"
-                className="rounded-md px-2 py-1 text-lg leading-none text-slate-400 hover:bg-slate-100"
+                className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800"
               >
                 ×
               </button>
+            </header>
+
+            <div className="space-y-6 p-5 sm:p-6">
+              {resumeError && (
+                <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                  {resumeError}
+                </p>
+              )}
+
+              <dl className="grid gap-4 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Employer</dt>
+                  <dd className="mt-1 text-slate-800">{selectedApplication.employer_name || "Not available"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Application date</dt>
+                  <dd className="mt-1 text-slate-800">{formatDate(selectedApplication.date_applied || selectedApplication.created_at)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Status</dt>
+                  <dd className="mt-1 text-slate-800">{getStatusLabel(getApplicationStatus(selectedApplication))}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Name submitted</dt>
+                  <dd className="mt-1 text-slate-800">{selectedApplication.applicant_name || "Not available"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Email submitted</dt>
+                  <dd className="mt-1 break-all text-slate-800">{selectedApplication.applicant_email || "Not available"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Contact number</dt>
+                  <dd className="mt-1 text-slate-800">{selectedApplication.contact_number || "Not available"}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Address</dt>
+                  <dd className="mt-1 text-slate-800">{selectedApplication.applicant_address || "Not available"}</dd>
+                </div>
+              </dl>
+
+              {selectedApplication.resume_url && (
+                <button
+                  type="button"
+                  disabled={openingResumeId === "application-details-resume"}
+                  onClick={() => void openResume(selectedApplication.resume_url, "application-details-resume")}
+                  className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {openingResumeId === "application-details-resume"
+                    ? "Opening..."
+                    : getResumeFileName(selectedApplication.resume_url)}
+                </button>
+              )}
+
+              <section>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Qualifications and requirements documents
+                </h3>
+                {(selectedApplication.applicant_qualification_files ?? []).length === 0 ? (
+                  <p className="mt-2 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+                    No qualification documents were attached to this application.
+                  </p>
+                ) : (
+                  <ul className="mt-3 space-y-2">
+                    {selectedApplication.applicant_qualification_files?.map((document) => (
+                      <li key={document.path}>
+                        <button
+                          type="button"
+                          disabled={openingDocumentPath === document.path}
+                          onClick={() => void openApplicationDocument(document)}
+                          className="max-w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-left text-sm font-semibold text-blue-800 hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
+                        >
+                          {openingDocumentPath === document.path
+                            ? "Opening..."
+                            : document.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
             </div>
-            <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
-              <div><dt className="font-semibold text-slate-500">Employer</dt><dd className="mt-1 text-slate-800">{selectedApplication.employer_name || "Not available"}</dd></div>
-              <div><dt className="font-semibold text-slate-500">Location</dt><dd className="mt-1 text-slate-800">{selectedApplication.job_location || "Not available"}</dd></div>
-              <div><dt className="font-semibold text-slate-500">Applicant email</dt><dd className="mt-1 break-all text-slate-800">{selectedApplication.applicant_email || "Not available"}</dd></div>
-              <div><dt className="font-semibold text-slate-500">Contact number</dt><dd className="mt-1 text-slate-800">{selectedApplication.contact_number || "Not available"}</dd></div>
-              <div className="sm:col-span-2"><dt className="font-semibold text-slate-500">Address</dt><dd className="mt-1 text-slate-800">{selectedApplication.applicant_address || "Not available"}</dd></div>
-              <div className="sm:col-span-2">
-                <dt className="font-semibold text-slate-500">Job requirements</dt>
-                <dd className="mt-1 whitespace-pre-wrap text-slate-800">
-                  {selectedApplication.job_requirements || "No requirements provided."}
-                </dd>
-              </div>
-            </dl>
           </section>
         </div>
       )}
