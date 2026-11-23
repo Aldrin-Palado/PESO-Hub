@@ -261,6 +261,19 @@ export default function DirectMessages({
             message.sender_user_id === conversationOwnerId ||
             message.recipient_user_id === conversationOwnerId
           ) {
+            const contactUserId =
+              message.sender_user_id === conversationOwnerId
+                ? message.recipient_user_id
+                : message.sender_user_id;
+            setArchivedConversationIds((current) =>
+              current.filter((contactId) => contactId !== contactUserId),
+            );
+            setConversationSection("active");
+            void supabase
+              .from("peso_message_archives")
+              .delete()
+              .eq("owner_user_id", userId)
+              .eq("contact_user_id", contactUserId);
             refreshContacts();
           }
         },
@@ -422,6 +435,15 @@ export default function DirectMessages({
             (message.sender_user_id === selectedUserId &&
               message.recipient_user_id === conversationOwnerId)
           ) {
+            setArchivedConversationIds((current) =>
+              current.filter((contactId) => contactId !== selectedUserId),
+            );
+            setConversationSection("active");
+            void supabase
+              .from("peso_message_archives")
+              .delete()
+              .eq("owner_user_id", userId)
+              .eq("contact_user_id", selectedUserId);
             void loadMessages(false);
           }
         },
@@ -501,6 +523,26 @@ export default function DirectMessages({
       setError(`Message could not be sent: ${sendError.message}`);
     } else {
       setDraft("");
+      setArchivedConversationIds((current) =>
+        current.filter((contactId) => contactId !== recipientUserId),
+      );
+      if (conversationSection === "archived") {
+        setConversationSection("active");
+        setSelectedUserId(recipientUserId);
+      }
+      void supabase
+        .from("peso_message_archives")
+        .delete()
+        .eq("owner_user_id", userId)
+        .eq("contact_user_id", recipientUserId)
+        .then(({ error: restoreError }) => {
+          if (restoreError) {
+            console.error(
+              "Could not restore the archived conversation locally:",
+              restoreError,
+            );
+          }
+        });
       if (selectedContact) {
         setContacts((current) =>
           current.some((contact) => contact.user_id === selectedContact.user_id)

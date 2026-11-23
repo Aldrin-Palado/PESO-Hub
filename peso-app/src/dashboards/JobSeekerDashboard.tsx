@@ -485,6 +485,74 @@ export default function JobSeekerDashboard() {
   }, []);
 
   useEffect(() => {
+    if (!seeker?.job_seeker_id) return;
+
+    let active = true;
+
+    const refreshSeekerProfile = async () => {
+      const { data, error } = await supabase
+        .from("job_seeker")
+        .select(
+          `
+            job_seeker_id,
+            user_id,
+            full_name,
+            email,
+            contact_no,
+            address,
+            birth_date,
+            resume_url,
+            verification_status,
+            registration_details
+          `,
+        )
+        .eq("job_seeker_id", seeker.job_seeker_id)
+        .maybeSingle();
+
+      if (!active) return;
+
+      if (error) {
+        console.error("Could not refresh Job Seeker profile:", error);
+        return;
+      }
+
+      if (data) {
+        setSeeker(data as Seeker);
+      }
+    };
+
+    const channel = supabase
+      .channel(`job-seeker-profile-${seeker.job_seeker_id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "job_seeker",
+          filter: `job_seeker_id=eq.${seeker.job_seeker_id}`,
+        },
+        () => void refreshSeekerProfile(),
+      )
+      .subscribe();
+
+    const refreshOnWindowFocus = () => {
+      if (document.visibilityState === "visible") {
+        void refreshSeekerProfile();
+      }
+    };
+
+    window.addEventListener("focus", refreshOnWindowFocus);
+    document.addEventListener("visibilitychange", refreshOnWindowFocus);
+
+    return () => {
+      active = false;
+      window.removeEventListener("focus", refreshOnWindowFocus);
+      document.removeEventListener("visibilitychange", refreshOnWindowFocus);
+      void supabase.removeChannel(channel);
+    };
+  }, [seeker?.job_seeker_id]);
+
+  useEffect(() => {
     if (!isSidebarOpen) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
