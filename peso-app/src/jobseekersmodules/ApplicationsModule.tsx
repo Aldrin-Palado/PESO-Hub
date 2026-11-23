@@ -1,17 +1,31 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { supabase } from "../services/supabase";
-import { getResumeFileName, openStoredResume } from "../services/resumes";
+import {
+  getResumeExtension,
+  getResumeFileName,
+  openStoredResume,
+  RESUME_ACCEPT,
+  RESUME_BUCKET,
+  RESUME_FORMATS_LABEL,
+  RESUME_MIME_TYPES,
+  openLocalResumeFile,
+} from "../services/resumes";
 import ApplicationArchiveTabs from "../components/ApplicationArchiveTabs";
 import {
   isApplicationArchived,
   type ApplicationArchiveSection,
 } from "../utils/applicationArchive";
 import { getApplicationStatusStyles } from "../utils/applicationStatusStyles";
+import { getEmployerProfileLogo } from "../utils/employerProfileLogo";
 
 type Seeker = {
   job_seeker_id: string;
+  user_id: string;
   full_name?: string | null;
   email?: string | null;
+  contact_no?: string | null;
+  address?: string | null;
+  resume_url?: string | null;
 };
 
 type JobSeekerPage =
@@ -30,6 +44,7 @@ type ApplicationEmployerProfile = {
   application_id: string;
   employer_name: string | null;
   employer_logo_url: string | null;
+  employer_is_peso: boolean;
 };
 
 type Application = {
@@ -49,10 +64,29 @@ type Application = {
   qualificationFiles: ApplicationDocument[];
 };
 
+type ApplicationEditValues = {
+  fullName: string;
+  email: string;
+  contactNumber: string;
+  address: string;
+};
+
 type Props = {
   seeker: Seeker;
   onNavigate: (page: JobSeekerPage) => void;
 };
+
+function canEditApplication(application: Application) {
+  const status = application.status
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  return (
+    ["pending", "under_review", "shortlisted"].includes(status) &&
+    !isApplicationArchived(application)
+  );
+}
 
 function StatusBadge({
   status,
@@ -92,6 +126,16 @@ export default function ApplicationsModule({
     useState<Application | null>(null);
   const [openingResume, setOpeningResume] = useState(false);
   const [resumeError, setResumeError] = useState("");
+  const [editingApplication, setEditingApplication] = useState(false);
+  const [editValues, setEditValues] = useState<ApplicationEditValues | null>(null);
+  const [editResumeFile, setEditResumeFile] = useState<File | null>(null);
+  const editResumeInputRef = useRef<HTMLInputElement>(null);
+  const [editQualificationFiles, setEditQualificationFiles] = useState<File[]>([]);
+  const [keptQualificationFiles, setKeptQualificationFiles] = useState<
+    ApplicationDocument[]
+  >([]);
+  const [savingApplication, setSavingApplication] = useState(false);
+  const [editError, setEditError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -167,7 +211,10 @@ export default function ApplicationsModule({
             id: row.application_id,
             job: row.position_title || "Position not specified",
             company: employerProfile?.employer_name || "Employer",
-            companyLogoUrl: employerProfile?.employer_logo_url ?? null,
+            companyLogoUrl: getEmployerProfileLogo(
+              employerProfile?.employer_logo_url,
+              employerProfile?.employer_is_peso,
+            ),
             date: new Date(row.date_applied).toLocaleDateString("en-PH", {
               year: "numeric",
               month: "long",
@@ -245,14 +292,248 @@ export default function ApplicationsModule({
       await openStoredResume(document.path);
     } catch (error) {
       console.error("Could not open application document:", error);
-      setResumeError(
+      const message =
         error instanceof Error
           ? error.message
-          : "Unable to open the uploaded document.",
-      );
+          : "Unable to open the uploaded document.";
+      if (editingApplication) setEditError(message);
+      else setResumeError(message);
     } finally {
       setOpeningResume(false);
     }
+  };
+
+  const handleOpenLocalQualificationFile = (file: File) => {
+    try {
+      openLocalResumeFile(file);
+    } catch (error) {
+      console.error("Could not preview selected qualification document:", error);
+      setEditError(
+        error instanceof Error
+          ? error.message
+          : "Unable to preview the selected document.",
+      );
+    }
+  };
+
+  const startEditingApplication = (application: Application) => {
+    if (!canEditApplication(application)) return;
+
+    setSelectedApplication(application);
+    setEditValues({
+      fullName: application.applicantName || seeker.full_name || "",
+      email: application.applicantEmail || seeker.email || "",
+      contactNumber: application.contactNumber || seeker.contact_no || "",
+      address: application.address || seeker.address || "",
+    });
+    setEditResumeFile(null);
+    setEditQualificationFiles([]);
+    setKeptQualificationFiles([...application.qualificationFiles]);
+    setEditError("");
+    setResumeError("");
+    setEditingApplication(true);
+  };
+
+  const cancelEditingApplication = () => {
+    setEditingApplication(false);
+    setEditValues(null);
+    setEditResumeFile(null);
+    setEditQualificationFiles([]);
+    setKeptQualificationFiles([]);
+    setEditError("");
+  };
+
+  const saveApplicationChanges = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedApplication || !editValues || savingApplication) return;
+
+    if (!canEditApplication(selectedApplication)) {
+      setEditError("This application can no longer be edited because its status has changed.");
+      return;
+    }
+
+    if (
+      !editValues.fullName.trim() ||
+      !editValues.email.trim() ||
+      !editValues.contactNumber.trim() ||
+      !editValues.address.trim()
+    ) {
+      setEditError("Please complete all contact details before saving.");
+      return;
+    }
+
+    if (editResumeFile) {
+      const extension = getResumeExtension(editResumeFile.name);
+      if (!RESUME_MIME_TYPES[extension]) {
+        setEditError(`Please choose a ${RESUME_FORMATS_LABEL} resume file.`);
+        return;
+      }
+      if (editResumeFile.size > 5 * 1024 * 1024) {
+        setEditError("Resume must not exceed 5 MB.");
+        return;
+      }
+    }
+
+    if (keptQualificationFiles.length + editQualificationFiles.length > 10) {
+      setEditError("You can attach up to 10 supporting documents.");
+      return;
+    }
+
+    const invalidQualificationFile = editQualificationFiles.find((file) => {
+      const extension = getResumeExtension(file.name);
+      return !RESUME_MIME_TYPES[extension] || file.size > 5 * 1024 * 1024;
+    });
+    if (invalidQualificationFile) {
+      setEditError(
+        `${invalidQualificationFile.name} must be a ${RESUME_FORMATS_LABEL} file up to 5 MB.`,
+      );
+      return;
+    }
+
+    setSavingApplication(true);
+    setEditError("");
+    const uploadedPaths: string[] = [];
+
+    try {
+      let resumeUrl = selectedApplication.resumeUrl;
+      if (editResumeFile) {
+        const extension = getResumeExtension(editResumeFile.name);
+        const safeFileName = editResumeFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const resumePath =
+          `${seeker.user_id}/applications/${selectedApplication.id}/` +
+          `${Date.now()}-resume-${safeFileName}`;
+        const { error: uploadError } = await supabase.storage
+          .from(RESUME_BUCKET)
+          .upload(resumePath, editResumeFile, {
+            upsert: false,
+            contentType: RESUME_MIME_TYPES[extension],
+          });
+        if (uploadError) {
+          throw new Error(`Unable to upload your resume: ${uploadError.message}`);
+        }
+        uploadedPaths.push(resumePath);
+        resumeUrl = resumePath;
+      }
+
+      const addedQualificationFiles: ApplicationDocument[] = [];
+      for (const [index, file] of editQualificationFiles.entries()) {
+        const extension = getResumeExtension(file.name);
+        const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const documentPath =
+          `${seeker.user_id}/applications/${selectedApplication.id}/` +
+          `${Date.now()}-${index}-${safeFileName}`;
+        const { error: uploadError } = await supabase.storage
+          .from(RESUME_BUCKET)
+          .upload(documentPath, file, {
+            upsert: false,
+            contentType: RESUME_MIME_TYPES[extension],
+          });
+        if (uploadError) {
+          throw new Error(`Unable to upload ${file.name}: ${uploadError.message}`);
+        }
+        uploadedPaths.push(documentPath);
+        addedQualificationFiles.push({ name: file.name, path: documentPath });
+      }
+
+      const qualificationFiles = [
+        ...keptQualificationFiles,
+        ...addedQualificationFiles,
+      ];
+      const { data, error: updateError } = await supabase
+        .from("application")
+        .update({
+          applicant_name: editValues.fullName.trim(),
+          applicant_email: editValues.email.trim(),
+          applicant_contact_no: editValues.contactNumber.trim(),
+          applicant_address: editValues.address.trim(),
+          applicant_resume_url: resumeUrl,
+          applicant_qualification_files: qualificationFiles,
+        })
+        .eq("application_id", selectedApplication.id)
+        .select("application_id")
+        .maybeSingle();
+
+      if (updateError) {
+        throw new Error(`Unable to update your application: ${updateError.message}`);
+      }
+      if (!data) {
+        throw new Error(
+          "Your application was not updated. Its status may have changed, or it may no longer be editable.",
+        );
+      }
+
+      uploadedPaths.length = 0;
+      const updatedApplication: Application = {
+        ...selectedApplication,
+        applicantName: editValues.fullName.trim(),
+        applicantEmail: editValues.email.trim(),
+        contactNumber: editValues.contactNumber.trim(),
+        address: editValues.address.trim(),
+        resumeUrl,
+        qualificationFiles,
+      };
+      setApplications((current) =>
+        current.map((application) =>
+          application.id === updatedApplication.id
+            ? updatedApplication
+            : application,
+        ),
+      );
+      setSelectedApplication(updatedApplication);
+      setEditingApplication(false);
+      setEditValues(null);
+      setEditResumeFile(null);
+      setEditQualificationFiles([]);
+      setKeptQualificationFiles([]);
+
+      const removedQualificationPaths = selectedApplication.qualificationFiles
+        .filter(
+          (document) =>
+            !keptQualificationFiles.some(
+              (keptDocument) => keptDocument.path === document.path,
+            ),
+        )
+        .map((document) => document.path);
+      if (removedQualificationPaths.length > 0) {
+        const { error: removeError } = await supabase.storage
+          .from(RESUME_BUCKET)
+          .remove(removedQualificationPaths);
+        if (removeError) {
+          console.error("Could not remove deleted application documents:", removeError);
+          setEditError(
+            "Application updated, but removed supporting documents could not be deleted.",
+          );
+        }
+      }
+    } catch (error) {
+      let message =
+        error instanceof Error ? error.message : "Unable to update your application.";
+      if (uploadedPaths.length > 0) {
+        const { error: cleanupError } = await supabase.storage
+          .from(RESUME_BUCKET)
+          .remove(uploadedPaths);
+        if (cleanupError) {
+          console.error("Could not remove unlinked application documents:", cleanupError);
+          message += " Some uploaded files may need to be removed manually.";
+        }
+      }
+      console.error("Error updating job application:", error);
+      setEditError(message);
+    } finally {
+      setSavingApplication(false);
+    }
+  };
+
+  const closeSelectedApplication = () => {
+    if (openingResume || savingApplication) return;
+    setSelectedApplication(null);
+    setEditingApplication(false);
+    setEditValues(null);
+    setEditResumeFile(null);
+    setEditQualificationFiles([]);
+    setKeptQualificationFiles([]);
+    setEditError("");
+    setResumeError("");
   };
 
   const filtered = useMemo(
@@ -419,16 +700,27 @@ export default function ApplicationsModule({
                 </div>
 
                 {/* Status + View */}
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
 
                   <StatusBadge
                     status={application.status}
                   />
 
+                  {canEditApplication(application) && (
+                    <button
+                      type="button"
+                      onClick={() => startEditingApplication(application)}
+                      className="rounded-lg border border-blue-200 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+                    >
+                      Edit
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => {
                       setResumeError("");
+                      setEditingApplication(false);
                       setSelectedApplication(application);
                     }}
                     className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 transition hover:bg-gray-50"
@@ -449,8 +741,12 @@ export default function ApplicationsModule({
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !openingResume) {
-              setSelectedApplication(null);
+            if (
+              event.target === event.currentTarget &&
+              !openingResume &&
+              !savingApplication
+            ) {
+              closeSelectedApplication();
             }
           }}
         >
@@ -466,7 +762,7 @@ export default function ApplicationsModule({
                   id="job-seeker-application-details-title"
                   className="text-lg font-bold text-gray-900"
                 >
-                  Application details
+                  {editingApplication ? "Edit application" : "Application details"}
                 </h2>
                 <p className="mt-1 text-sm text-blue-700">
                   {selectedApplication.job}
@@ -474,126 +770,430 @@ export default function ApplicationsModule({
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedApplication(null)}
-                disabled={openingResume}
-                aria-label="Close application details"
+                onClick={closeSelectedApplication}
+                disabled={openingResume || savingApplication}
+                aria-label="Close application"
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xl text-gray-500 hover:bg-gray-100 disabled:opacity-50"
               >
                 ×
               </button>
             </header>
 
-            <dl className="mt-5 grid gap-4 rounded-xl bg-gray-50 p-4 text-sm sm:grid-cols-2">
-              <div>
-                <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Employer
-                </dt>
-                <dd className="mt-1 font-medium text-gray-900">
-                  {selectedApplication.company}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Application date
-                </dt>
-                <dd className="mt-1 font-medium text-gray-900">
-                  {selectedApplication.date}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Status
-                </dt>
-                <dd className="mt-1">
-                  <StatusBadge status={selectedApplication.status} />
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Name submitted
-                </dt>
-                <dd className="mt-1 font-medium text-gray-900">
-                  {selectedApplication.applicantName || seeker.full_name || "Not available"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Email submitted
-                </dt>
-                <dd className="mt-1 break-all font-medium text-gray-900">
-                  {selectedApplication.applicantEmail || seeker.email || "Not available"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Contact number
-                </dt>
-                <dd className="mt-1 font-medium text-gray-900">
-                  {selectedApplication.contactNumber || "Not available"}
-                </dd>
-              </div>
-              <div className="sm:col-span-2">
-                <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Address
-                </dt>
-                <dd className="mt-1 whitespace-pre-wrap font-medium text-gray-900">
-                  {selectedApplication.address || "Not available"}
-                </dd>
-              </div>
-            </dl>
-
-            {resumeError && (
+            {editError && (
               <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-                {resumeError}
+                {editError}
               </p>
             )}
 
-            {selectedApplication.resumeUrl && (
-              <div className="mt-5">
-                <button
-                  type="button"
-                  onClick={() => void handleOpenResume()}
-                  disabled={openingResume}
-                  className="max-w-full truncate rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-left text-sm font-semibold text-blue-800 hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
-                >
-                  {openingResume
-                    ? "Opening..."
-                    : `View ${getResumeFileName(selectedApplication.resumeUrl)}`}
-                </button>
-              </div>
-            )}
+            {editingApplication && editValues ? (
+              <form onSubmit={saveApplicationChanges} className="mt-5 space-y-4">
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-semibold text-gray-700">
+                    Full name
+                  </span>
+                  <input
+                    required
+                    value={editValues.fullName}
+                    onChange={(event) =>
+                      setEditValues((current) =>
+                        current ? { ...current, fullName: event.target.value } : current,
+                      )
+                    }
+                    disabled={savingApplication}
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-semibold text-gray-700">
+                    Email
+                  </span>
+                  <input
+                    required
+                    type="email"
+                    value={editValues.email}
+                    onChange={(event) =>
+                      setEditValues((current) =>
+                        current ? { ...current, email: event.target.value } : current,
+                      )
+                    }
+                    disabled={savingApplication}
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-semibold text-gray-700">
+                    Contact number
+                  </span>
+                  <input
+                    required
+                    type="tel"
+                    value={editValues.contactNumber}
+                    onChange={(event) =>
+                      setEditValues((current) =>
+                        current
+                          ? { ...current, contactNumber: event.target.value }
+                          : current,
+                      )
+                    }
+                    disabled={savingApplication}
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-semibold text-gray-700">
+                    Address
+                  </span>
+                  <textarea
+                    required
+                    rows={3}
+                    value={editValues.address}
+                    onChange={(event) =>
+                      setEditValues((current) =>
+                        current ? { ...current, address: event.target.value } : current,
+                      )
+                    }
+                    disabled={savingApplication}
+                    className="w-full resize-y rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+                  />
+                </label>
 
-            {selectedApplication.qualificationFiles.length > 0 && (
-              <section className="mt-5">
-                <h3 className="text-sm font-semibold text-gray-800">
-                  Qualifications and requirements documents
-                </h3>
-                <div className="mt-2 flex flex-col items-start gap-2">
-                  {selectedApplication.qualificationFiles.map((document) => (
+                <div>
+                  <p className="mb-1.5 text-sm font-semibold text-gray-700">
+                    Resume
+                  </p>
+                  <div className="rounded-xl border border-slate-300 p-3">
+                    {editResumeFile ? (
+                      <p className="break-all text-sm font-semibold text-slate-800">
+                        {editResumeFile.name}
+                      </p>
+                    ) : selectedApplication.resumeUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => void handleOpenResume()}
+                        disabled={openingResume || savingApplication}
+                        className="break-all text-left text-sm font-semibold text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 disabled:opacity-60"
+                      >
+                        {openingResume
+                          ? "Opening resume..."
+                          : getResumeFileName(selectedApplication.resumeUrl)}
+                      </button>
+                    ) : (
+                      <p className="text-sm font-semibold text-slate-800">
+                        No resume attached
+                      </p>
+                    )}
+                    <p className="mt-1 text-xs text-slate-500">
+                      {editResumeFile
+                        ? "Selected as the resume for this application."
+                        : selectedApplication.resumeUrl
+                          ? "This resume is currently attached to the application."
+                          : `Choose a ${RESUME_FORMATS_LABEL} file up to 5 MB.`}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {editResumeFile && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditResumeFile(null);
+                            if (editResumeInputRef.current) {
+                              editResumeInputRef.current.value = "";
+                            }
+                          }}
+                          disabled={savingApplication}
+                          className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                        >
+                          {selectedApplication.resumeUrl
+                            ? "Keep current resume"
+                            : "Clear selection"}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => editResumeInputRef.current?.click()}
+                        disabled={savingApplication}
+                        className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+                      >
+                        {editResumeFile
+                          ? "Choose a different file"
+                          : selectedApplication.resumeUrl
+                            ? "Replace resume"
+                            : "Choose resume"}
+                      </button>
+                    </div>
+                    <input
+                      ref={editResumeInputRef}
+                      type="file"
+                      accept={RESUME_ACCEPT}
+                      aria-label="Choose a replacement resume"
+                      disabled={savingApplication}
+                      onChange={(event) =>
+                        setEditResumeFile(event.target.files?.[0] ?? null)
+                      }
+                      className="sr-only"
+                    />
+                  </div>
+                  {resumeError && (
+                    <p role="alert" className="mt-2 text-xs text-red-700">
+                      {resumeError}
+                    </p>
+                  )}
+                </div>
+
+                <section>
+                  <h3 className="text-sm font-semibold text-gray-700">
+                    Qualifications and requirements documents
+                  </h3>
+                  {keptQualificationFiles.length > 0 ? (
+                    <ul className="mt-2 space-y-2">
+                      {keptQualificationFiles.map((document) => (
+                        <li
+                          key={document.path}
+                          className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => void handleOpenQualificationFile(document)}
+                            disabled={openingResume || savingApplication}
+                            className="min-w-0 truncate text-left text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 disabled:opacity-60"
+                          >
+                            {document.name}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setKeptQualificationFiles((current) =>
+                                current.filter((item) => item.path !== document.path),
+                              )
+                            }
+                            disabled={savingApplication}
+                            className="shrink-0 text-xs font-semibold text-red-700 hover:underline disabled:opacity-50"
+                          >
+                            Remove
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1.5 text-xs text-slate-500">
+                      No supporting documents are attached.
+                    </p>
+                  )}
+                  <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-slate-300 p-3">
+                    <span className="min-w-0 truncate text-sm text-slate-600">
+                      {editQualificationFiles.length > 0
+                        ? `${editQualificationFiles.length} new file${editQualificationFiles.length === 1 ? "" : "s"} selected`
+                        : "No new files selected"}
+                    </span>
+                    <label
+                      className={`relative inline-flex shrink-0 items-center overflow-hidden rounded-lg bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 ${
+                        savingApplication ||
+                        keptQualificationFiles.length + editQualificationFiles.length >= 10
+                          ? "cursor-not-allowed opacity-60"
+                          : "cursor-pointer hover:bg-blue-100"
+                      }`}
+                    >
+                      Choose files
+                      <input
+                        type="file"
+                        multiple
+                        accept={RESUME_ACCEPT}
+                        disabled={
+                          savingApplication ||
+                          keptQualificationFiles.length + editQualificationFiles.length >= 10
+                        }
+                        aria-label="Choose additional qualification documents"
+                        onChange={(event) => {
+                          const selectedFiles = Array.from(
+                            event.currentTarget.files ?? [],
+                          );
+                          setEditQualificationFiles((current) => [
+                            ...current,
+                            ...selectedFiles,
+                          ]);
+                          event.currentTarget.value = "";
+                        }}
+                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                      />
+                    </label>
+                  </div>
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    Add up to 10 total documents ({RESUME_FORMATS_LABEL}), maximum 5 MB each.
+                  </p>
+                  {editQualificationFiles.length > 0 && (
+                    <ul className="mt-2 space-y-2">
+                      {editQualificationFiles.map((file, index) => (
+                        <li
+                          key={`${file.name}-${index}`}
+                          className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleOpenLocalQualificationFile(file)}
+                            disabled={savingApplication}
+                            className="min-w-0 truncate text-left text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 disabled:opacity-60"
+                          >
+                            {file.name}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditQualificationFiles((current) =>
+                                current.filter((_, fileIndex) => fileIndex !== index),
+                              )
+                            }
+                            disabled={savingApplication}
+                            className="shrink-0 font-semibold text-red-700 hover:underline disabled:opacity-50"
+                          >
+                            Remove
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
+                <div className="flex flex-col-reverse justify-end gap-3 pt-2 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={cancelEditingApplication}
+                    disabled={savingApplication}
+                    className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingApplication}
+                    className="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {savingApplication ? "Saving..." : "Save changes"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <dl className="mt-5 grid gap-4 rounded-xl bg-gray-50 p-4 text-sm sm:grid-cols-2">
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Employer
+                    </dt>
+                    <dd className="mt-1 font-medium text-gray-900">
+                      {selectedApplication.company}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Application date
+                    </dt>
+                    <dd className="mt-1 font-medium text-gray-900">
+                      {selectedApplication.date}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Status
+                    </dt>
+                    <dd className="mt-1">
+                      <StatusBadge status={selectedApplication.status} />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Name submitted
+                    </dt>
+                    <dd className="mt-1 font-medium text-gray-900">
+                      {selectedApplication.applicantName || seeker.full_name || "Not available"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Email submitted
+                    </dt>
+                    <dd className="mt-1 break-all font-medium text-gray-900">
+                      {selectedApplication.applicantEmail || seeker.email || "Not available"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Contact number
+                    </dt>
+                    <dd className="mt-1 font-medium text-gray-900">
+                      {selectedApplication.contactNumber || "Not available"}
+                    </dd>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Address
+                    </dt>
+                    <dd className="mt-1 whitespace-pre-wrap font-medium text-gray-900">
+                      {selectedApplication.address || "Not available"}
+                    </dd>
+                  </div>
+                </dl>
+
+                {resumeError && (
+                  <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                    {resumeError}
+                  </p>
+                )}
+
+                {selectedApplication.resumeUrl && (
+                  <div className="mt-5">
                     <button
-                      key={document.path}
                       type="button"
-                      onClick={() => void handleOpenQualificationFile(document)}
+                      onClick={() => void handleOpenResume()}
                       disabled={openingResume}
                       className="max-w-full truncate rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-left text-sm font-semibold text-blue-800 hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
                     >
-                      {openingResume ? "Opening..." : `View ${document.name}`}
+                      {openingResume
+                        ? "Opening..."
+                        : `View ${getResumeFileName(selectedApplication.resumeUrl)}`}
                     </button>
-                  ))}
-                </div>
-              </section>
-            )}
+                  </div>
+                )}
 
-            <footer className="mt-5 flex flex-wrap justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setSelectedApplication(null)}
-                disabled={openingResume}
-                className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-              >
-                Close
-              </button>
-            </footer>
+                {selectedApplication.qualificationFiles.length > 0 && (
+                  <section className="mt-5">
+                    <h3 className="text-sm font-semibold text-gray-800">
+                      Qualifications and requirements documents
+                    </h3>
+                    <div className="mt-2 flex flex-col items-start gap-2">
+                      {selectedApplication.qualificationFiles.map((document) => (
+                        <button
+                          key={document.path}
+                          type="button"
+                          onClick={() => void handleOpenQualificationFile(document)}
+                          disabled={openingResume}
+                          className="max-w-full truncate rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-left text-sm font-semibold text-blue-800 hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
+                        >
+                          {openingResume ? "Opening..." : document.name}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                <footer className="mt-5 flex flex-wrap justify-end gap-3">
+                  {canEditApplication(selectedApplication) && (
+                    <button
+                      type="button"
+                      onClick={() => startEditingApplication(selectedApplication)}
+                      className="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-800"
+                    >
+                      Edit application
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={closeSelectedApplication}
+                    disabled={openingResume || savingApplication}
+                    className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Close
+                  </button>
+                </footer>
+              </>
+            )}
           </section>
         </div>
       )}

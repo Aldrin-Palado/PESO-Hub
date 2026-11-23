@@ -10,6 +10,7 @@ import {
   type ApplicationArchiveSection,
 } from "../utils/applicationArchive";
 import { getApplicationStatusStyles } from "../utils/applicationStatusStyles";
+import { getEmployerProfileLogo } from "../utils/employerProfileLogo";
 
 type Application = {
   id?: string;
@@ -28,6 +29,8 @@ type Application = {
   date_applied?: string;
   position_title?: string | null;
   employer_name?: string | null;
+  employer_logo_url?: string | null;
+  employer_is_peso?: boolean;
   job_location?: string | null;
   job_requirements?: string | null;
   applicant_name?: string | null;
@@ -257,23 +260,44 @@ export default function ApplicationsModule({
     }
 
     return [...groups.entries()]
-      .map(([key, groupApplications]) => ({
-        key,
-        name: groupApplications[0].applicant_name || "Applicant",
-        email:
-          groupApplications[0].applicant_email ||
-          groupApplications[0].job_seeker_id ||
-          "Email unavailable",
-        applications: [...groupApplications].sort((first, second) => {
-          const firstDate = new Date(
-            first.date_applied || first.created_at || 0,
-          ).getTime();
-          const secondDate = new Date(
-            second.date_applied || second.created_at || 0,
-          ).getTime();
-          return firstDate - secondDate;
-        }),
-      }))
+      .map(([key, groupApplications]) => {
+        const employerProfiles = new Map<
+          string,
+          { id: string; name: string; logoUrl: string | null }
+        >();
+        for (const application of groupApplications) {
+          if (!application.employer_id || employerProfiles.has(application.employer_id)) {
+            continue;
+          }
+          employerProfiles.set(application.employer_id, {
+            id: application.employer_id,
+            name: application.employer_name || "Employer",
+            logoUrl: getEmployerProfileLogo(
+              application.employer_logo_url,
+              application.employer_is_peso,
+            ),
+          });
+        }
+
+        return {
+          key,
+          name: groupApplications[0].applicant_name || "Applicant",
+          email:
+            groupApplications[0].applicant_email ||
+            groupApplications[0].job_seeker_id ||
+            "Email unavailable",
+          employerProfiles: [...employerProfiles.values()],
+          applications: [...groupApplications].sort((first, second) => {
+            const firstDate = new Date(
+              first.date_applied || first.created_at || 0,
+            ).getTime();
+            const secondDate = new Date(
+              second.date_applied || second.created_at || 0,
+            ).getTime();
+            return firstDate - secondDate;
+          }),
+        };
+      })
       .sort((first, second) => first.name.localeCompare(second.name));
   }, [visibleApplications]);
 
@@ -534,40 +558,69 @@ export default function ApplicationsModule({
                       <p className="truncate text-[9px] text-slate-400">{group.email}</p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    aria-expanded={expandedApplicants.has(group.key)}
-                    aria-controls={
-                      expandedApplicants.has(group.key)
-                        ? `applications-${encodeURIComponent(group.key)}`
-                        : undefined
-                    }
-                    aria-label={`${expandedApplicants.has(group.key) ? "Hide" : "Show"} applications for ${group.name} (${group.applications.length})`}
-                    onClick={() =>
-                      setExpandedApplicants((current) => {
-                        const next = new Set(current);
-                        if (next.has(group.key)) {
-                          next.delete(group.key);
-                        } else {
-                          next.add(group.key);
-                        }
-                        return next;
-                      })
-                    }
-                    className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-[10px] font-semibold text-slate-600 transition hover:bg-white hover:text-[#0759AE] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-                  >
-                    <span className="rounded-full bg-white px-2 py-0.5 text-[9px] text-slate-500 ring-1 ring-slate-200">
-                      {group.applications.length}
-                    </span>
-                    <span
-                      aria-hidden="true"
-                      className={`text-sm leading-none transition-transform ${
-                        expandedApplicants.has(group.key) ? "rotate-180" : ""
-                      }`}
+                  <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex items-center -space-x-1.5" aria-label="Employers">
+                      {group.employerProfiles.slice(0, 3).map((employer) => (
+                        <span
+                          key={employer.id}
+                          title={employer.name}
+                          className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-lg border-2 border-white bg-slate-100 text-[9px] font-bold text-slate-600"
+                        >
+                          {employer.logoUrl ? (
+                            <img
+                              src={employer.logoUrl}
+                              alt={`${employer.name} logo`}
+                              className="h-full w-full object-contain"
+                            />
+                          ) : (
+                            employer.name.trim().charAt(0).toUpperCase()
+                          )}
+                        </span>
+                      ))}
+                      {group.employerProfiles.length > 3 && (
+                        <span
+                          title={`${group.employerProfiles.length - 3} more employers`}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border-2 border-white bg-slate-100 text-[8px] font-bold text-slate-600"
+                        >
+                          +{group.employerProfiles.length - 3}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      aria-expanded={expandedApplicants.has(group.key)}
+                      aria-controls={
+                        expandedApplicants.has(group.key)
+                          ? `applications-${encodeURIComponent(group.key)}`
+                          : undefined
+                      }
+                      aria-label={`${expandedApplicants.has(group.key) ? "Hide" : "Show"} applications for ${group.name} (${group.applications.length})`}
+                      onClick={() =>
+                        setExpandedApplicants((current) => {
+                          const next = new Set(current);
+                          if (next.has(group.key)) {
+                            next.delete(group.key);
+                          } else {
+                            next.add(group.key);
+                          }
+                          return next;
+                        })
+                      }
+                      className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-[10px] font-semibold text-slate-600 transition hover:bg-white hover:text-[#0759AE] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                     >
-                      ▾
-                    </span>
-                  </button>
+                      <span className="rounded-full bg-white px-2 py-0.5 text-[9px] text-slate-500 ring-1 ring-slate-200">
+                        {group.applications.length}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className={`text-sm leading-none transition-transform ${
+                          expandedApplicants.has(group.key) ? "rotate-180" : ""
+                        }`}
+                      >
+                        ▾
+                      </span>
+                    </button>
+                  </div>
                 </header>
                 {expandedApplicants.has(group.key) && (
                   <div

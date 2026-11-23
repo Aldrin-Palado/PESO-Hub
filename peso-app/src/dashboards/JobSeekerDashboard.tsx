@@ -1538,6 +1538,7 @@ export default function JobSeekerDashboard() {
                       type="button"
                       onClick={() => {
                         setEditingResume((editing) => !editing);
+                        if (editingResume) setResumeFile(null);
                         setResumeError("");
                         setResumeSuccess("");
                       }}
@@ -1572,7 +1573,6 @@ export default function JobSeekerDashboard() {
                       accept={RESUME_ACCEPT}
                       onChange={(event) => {
                         setResumeFile(event.target.files?.[0] ?? null);
-                        event.currentTarget.value = "";
                         setResumeError("");
                         setResumeSuccess("");
                       }}

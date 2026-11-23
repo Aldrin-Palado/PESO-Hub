@@ -1697,7 +1697,9 @@ export default function AdminDashboard() {
             .order("created_at", {
               ascending: false,
             }),
-          supabase.from("employer").select("employer_id, name, is_peso"),
+          supabase
+            .from("employer")
+            .select("employer_id, name, logo_url, is_peso"),
           supabase
             .from("job_vacancy")
             .select("job_vacancy_id, position_title, employer_id, posted_by_user_id, requirements, location"),
@@ -1707,7 +1709,11 @@ export default function AdminDashboard() {
       const employersById = new Map(
         (employersResult.data ?? []).map((employer) => [
           employer.employer_id,
-          employer.name,
+          {
+            name: employer.name,
+            logo_url: employer.logo_url,
+            is_peso: employer.is_peso,
+          },
         ]),
       );
       const pesoEmployerIds = new Set(
@@ -1811,7 +1817,11 @@ export default function AdminDashboard() {
             applicant_address:
               application.applicant_address ?? seeker?.address ?? null,
             employer_name:
-              employersById.get(application.employer_id) ?? null,
+              employersById.get(application.employer_id)?.name ?? null,
+            employer_logo_url:
+              employersById.get(application.employer_id)?.logo_url ?? null,
+            employer_is_peso:
+              employersById.get(application.employer_id)?.is_peso ?? false,
             is_peso_application: pesoEmployerIds.has(application.employer_id),
             is_own_peso_application: Boolean(
               pesoEmployerIds.has(application.employer_id) &&

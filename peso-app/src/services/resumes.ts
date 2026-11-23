@@ -28,6 +28,22 @@ export function getResumeFileName(resumeValue: string): string {
   return timestampedName?.[1] ?? storedName;
 }
 
+function getResumeObjectPath(resumeUrl: string): string | null {
+  const url = new URL(resumeUrl);
+  const match = url.pathname.match(
+    /\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)$/,
+  );
+
+  if (!match || decodeURIComponent(match[1]) !== RESUME_BUCKET) {
+    return null;
+  }
+
+  return match[2]
+    .split("/")
+    .map((segment) => decodeURIComponent(segment))
+    .join("/");
+}
+
 export async function getResumeUrl(resumeValue: string) {
   const trimmed = resumeValue.trim();
 
@@ -35,15 +51,25 @@ export async function getResumeUrl(resumeValue: string) {
     throw new Error("No resume has been uploaded.");
   }
 
-  if (/^(?:https?:|data:)/i.test(trimmed)) {
+  if (/^data:/i.test(trimmed)) {
     return trimmed;
   }
 
   let path = trimmed.replace(/^\/+/, "");
+
+  if (/^https?:/i.test(trimmed)) {
+    const storedObjectPath = getResumeObjectPath(trimmed);
+    if (!storedObjectPath) return trimmed;
+    path = storedObjectPath;
+  }
+
   const bucketPrefix = `${RESUME_BUCKET}/`;
+  const encodedBucketPrefix = `${encodeURIComponent(RESUME_BUCKET)}/`;
 
   if (path.startsWith(bucketPrefix)) {
     path = path.slice(bucketPrefix.length);
+  } else if (path.startsWith(encodedBucketPrefix)) {
+    path = path.slice(encodedBucketPrefix.length);
   }
 
   const { data, error } = await supabase.storage
@@ -56,10 +82,36 @@ export async function getResumeUrl(resumeValue: string) {
 }
 
 export async function openStoredResume(resumeValue: string) {
-  const url = await getResumeUrl(resumeValue);
-  const link = document.createElement("a");
-  link.href = url;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  link.click();
+  const resumeWindow = window.open("about:blank", "_blank");
+  if (resumeWindow) resumeWindow.opener = null;
+
+  try {
+    const url = await getResumeUrl(resumeValue);
+    if (resumeWindow) {
+      resumeWindow.location.href = url;
+      return;
+    }
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.click();
+  } catch (error) {
+    resumeWindow?.close();
+    throw error;
+  }
+}
+
+export function openLocalResumeFile(file: File) {
+  const fileUrl = URL.createObjectURL(file);
+  const fileWindow = window.open(fileUrl, "_blank");
+
+  if (!fileWindow) {
+    URL.revokeObjectURL(fileUrl);
+    throw new Error("Your browser blocked the file preview. Allow pop-ups and try again.");
+  }
+
+  fileWindow.opener = null;
+  window.setTimeout(() => URL.revokeObjectURL(fileUrl), 5 * 60 * 1000);
 }

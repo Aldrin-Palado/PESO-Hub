@@ -17,6 +17,9 @@ import {
   RESUME_FORMATS_LABEL,
   RESUME_MIME_TYPES,
   getResumeExtension,
+  getResumeFileName,
+  openLocalResumeFile,
+  openStoredResume,
 } from "../services/resumes";
 import { isJobSeekerProfileComplete } from "../services/jobSeekerProfile";
 import { getEmployerProfileLogo } from "../utils/employerProfileLogo";
@@ -122,8 +125,10 @@ export default function JobsModule({
   const [applicationSubmitting, setApplicationSubmitting] = useState(false);
   const [applicationSubmitted, setApplicationSubmitted] = useState(false);
   const [applicationResumeFile, setApplicationResumeFile] = useState<File | null>(null);
+  const [openingProfileResume, setOpeningProfileResume] = useState(false);
   const [applicationQualificationFiles, setApplicationQualificationFiles] =
     useState<File[]>([]);
+  const applicationResumeInputRef = useRef<HTMLInputElement>(null);
   const handledInitialApplicationId = useRef<string | null>(null);
 
   useEffect(() => {
@@ -614,6 +619,36 @@ export default function JobsModule({
       );
     } finally {
       setApplicationSubmitting(false);
+    }
+  };
+
+  const handleOpenProfileResume = async () => {
+    if (!seeker.resume_url || openingProfileResume) return;
+
+    setOpeningProfileResume(true);
+    setApplicationError("");
+    try {
+      await openStoredResume(seeker.resume_url);
+    } catch (error) {
+      console.error("Could not open profile resume:", error);
+      setApplicationError(
+        error instanceof Error ? error.message : "Unable to open your profile resume.",
+      );
+    } finally {
+      setOpeningProfileResume(false);
+    }
+  };
+
+  const handleOpenLocalQualificationFile = (file: File) => {
+    try {
+      openLocalResumeFile(file);
+    } catch (error) {
+      console.error("Could not preview selected qualification document:", error);
+      setApplicationError(
+        error instanceof Error
+          ? error.message
+          : "Unable to preview the selected document.",
+      );
     }
   };
 
@@ -1429,59 +1464,156 @@ export default function JobsModule({
                       className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                     />
                   </label>
-                  <label className="block">
-                    <span className="mb-1.5 block text-sm font-semibold text-slate-700">
+                  <div className="block">
+                    <span id="application-resume-label" className="mb-1.5 block text-sm font-semibold text-slate-700">
                       Resume
                     </span>
-                    <input
-                      type="file"
-                      accept={RESUME_ACCEPT}
-                      disabled={applicationSubmitting}
-                      onChange={(event) => {
-                        setApplicationResumeFile(event.target.files?.[0] ?? null);
-                        event.target.value = "";
-                      }}
-                      className="block w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-60"
-                    />
-                    <span className="mt-1.5 block text-xs text-slate-500">
-                      {applicationResumeFile
-                        ? `Selected: ${applicationResumeFile.name}`
-                        : seeker.resume_url
-                          ? `Your profile resume will be attached if you do not choose another. Upload a ${RESUME_FORMATS_LABEL} file up to 5 MB to use a different resume.`
-                          : `Upload a ${RESUME_FORMATS_LABEL} file up to 5 MB.`}
-                    </span>
-                  </label>
-                  <label className="block">
+                    <div className="rounded-xl border border-slate-300 p-3">
+                      {applicationResumeFile ? (
+                        <p className="break-all text-sm font-semibold text-slate-800">
+                          {applicationResumeFile.name}
+                        </p>
+                      ) : seeker.resume_url ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleOpenProfileResume()}
+                          disabled={openingProfileResume || applicationSubmitting}
+                          className="break-all text-left text-sm font-semibold text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 disabled:opacity-60"
+                        >
+                          {openingProfileResume
+                            ? "Opening resume..."
+                            : getResumeFileName(seeker.resume_url)}
+                        </button>
+                      ) : (
+                        <p className="text-sm font-semibold text-slate-800">
+                          No resume uploaded
+                        </p>
+                      )}
+                      <p className="mt-1 text-xs text-slate-500">
+                        {applicationResumeFile
+                          ? "Selected as the resume for this application."
+                          : seeker.resume_url
+                            ? "This profile resume will be attached to your application."
+                            : `Choose a ${RESUME_FORMATS_LABEL} file up to 5 MB.`}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {applicationResumeFile && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setApplicationResumeFile(null);
+                              if (applicationResumeInputRef.current) {
+                                applicationResumeInputRef.current.value = "";
+                              }
+                            }}
+                            disabled={applicationSubmitting}
+                            className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                          >
+                            {seeker.resume_url ? "Use profile resume" : "Clear selection"}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => applicationResumeInputRef.current?.click()}
+                          disabled={applicationSubmitting}
+                          className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+                        >
+                          {applicationResumeFile
+                            ? "Choose a different file"
+                            : seeker.resume_url
+                              ? "Replace for this application"
+                              : "Choose resume"}
+                        </button>
+                      </div>
+                      <input
+                        ref={applicationResumeInputRef}
+                        type="file"
+                        accept={RESUME_ACCEPT}
+                        aria-labelledby="application-resume-label"
+                        disabled={applicationSubmitting}
+                        onChange={(event) => {
+                          setApplicationResumeFile(event.target.files?.[0] ?? null);
+                          setApplicationError("");
+                        }}
+                        className="sr-only"
+                      />
+                    </div>
+                  </div>
+                  <div className="block">
                     <span className="mb-1.5 block text-sm font-semibold text-slate-700">
                       Qualifications and requirements documents
                       <span className="ml-1 font-normal text-slate-500">
                         (optional)
                       </span>
                     </span>
-                    <input
-                      type="file"
-                      multiple
-                      accept={RESUME_ACCEPT}
-                      disabled={applicationSubmitting}
-                      onChange={(event) => {
-                        setApplicationQualificationFiles(
-                          Array.from(event.target.files ?? []),
-                        );
-                        event.target.value = "";
-                      }}
-                      className="block w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-60"
-                    />
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-300 p-3">
+                      <span className="min-w-0 truncate text-sm text-slate-600">
+                        {applicationQualificationFiles.length > 0
+                          ? `${applicationQualificationFiles.length} file${applicationQualificationFiles.length === 1 ? "" : "s"} selected`
+                          : "No supporting files selected"}
+                      </span>
+                      <label
+                        className={`relative inline-flex shrink-0 items-center overflow-hidden rounded-lg bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 ${
+                          applicationSubmitting
+                            ? "cursor-not-allowed opacity-60"
+                            : "cursor-pointer hover:bg-blue-100"
+                        }`}
+                      >
+                        Choose files
+                        <input
+                          type="file"
+                          multiple
+                          accept={RESUME_ACCEPT}
+                          disabled={applicationSubmitting}
+                          onChange={(event) => {
+                            const selectedFiles = Array.from(
+                              event.currentTarget.files ?? [],
+                            );
+                            setApplicationQualificationFiles((current) => [
+                              ...current,
+                              ...selectedFiles,
+                            ]);
+                            event.currentTarget.value = "";
+                          }}
+                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                          aria-label="Choose qualification and requirements documents"
+                        />
+                      </label>
+                    </div>
                     <span className="mt-1.5 block text-xs text-slate-500">
                       Upload up to 10 files ({RESUME_FORMATS_LABEL}), maximum 5 MB each.
                     </span>
                     {applicationQualificationFiles.length > 0 && (
-                      <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-slate-600">
+                      <ul className="mt-2 space-y-2">
                         {applicationQualificationFiles.map((file, index) => (
-                          <li key={`${file.name}-${index}`}>{file.name}</li>
+                          <li
+                            key={`${file.name}-${index}`}
+                            className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleOpenLocalQualificationFile(file)}
+                              className="min-w-0 truncate text-left text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900"
+                            >
+                              {file.name}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setApplicationQualificationFiles((current) =>
+                                  current.filter((_, fileIndex) => fileIndex !== index),
+                                )
+                              }
+                              disabled={applicationSubmitting}
+                              className="shrink-0 font-semibold text-red-700 hover:underline disabled:opacity-50"
+                            >
+                              Remove
+                            </button>
+                          </li>
                         ))}
                       </ul>
                     )}
-                  </label>
+                  </div>
 
                   {applicationError && (
                     <p
