@@ -50,6 +50,7 @@ export default function DirectMessages({
   const [archivedConversationIds, setArchivedConversationIds] = useState<
     string[]
   >([]);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [conversationSection, setConversationSection] = useState<
     "active" | "archived"
   >("active");
@@ -86,6 +87,29 @@ export default function DirectMessages({
   const archivedContactCount = contacts.length - activeContactCount;
   const recipientUserId = selectedContact?.user_id;
   const conversationOwnerId = mode === "staff" ? mailboxUserId : userId;
+
+  const refreshUnreadCounts = useCallback(
+    async (ownerId: string) => {
+      const { data, error: unreadError } = await supabase
+        .from("peso_messages")
+        .select("sender_user_id")
+        .eq("recipient_user_id", ownerId)
+        .is("read_at", null);
+
+      if (unreadError) {
+        console.error("Could not load unread messages:", unreadError);
+        return;
+      }
+
+      const counts: Record<string, number> = {};
+      for (const message of data ?? []) {
+        const senderId = message.sender_user_id;
+        counts[senderId] = (counts[senderId] ?? 0) + 1;
+      }
+      setUnreadCounts(counts);
+    },
+    [],
+  );
 
   const refreshConversationContacts = useCallback(
     async (ownerId: string): Promise<MessageContact[]> => {
@@ -234,7 +258,9 @@ export default function DirectMessages({
 
     let active = true;
     let fallbackPoll: ReturnType<typeof setInterval> | null = null;
+    void refreshUnreadCounts(conversationOwnerId);
     const refreshContacts = () => {
+      void refreshUnreadCounts(conversationOwnerId);
       void refreshConversationContacts(conversationOwnerId)
         .then((nextContacts) => {
           if (active) setContacts(nextContacts);
@@ -249,6 +275,15 @@ export default function DirectMessages({
             );
           }
         });
+    };
+    const refreshImmediately = () => {
+      refreshContacts();
+      window.setTimeout(() => {
+        if (active) refreshContacts();
+      }, 300);
+      window.setTimeout(() => {
+        if (active) refreshContacts();
+      }, 1200);
     };
     const channel = supabase
       .channel(`peso-conversations-${conversationOwnerId}`)
@@ -265,6 +300,12 @@ export default function DirectMessages({
               message.sender_user_id === conversationOwnerId
                 ? message.recipient_user_id
                 : message.sender_user_id;
+            if (message.recipient_user_id === conversationOwnerId) {
+              setUnreadCounts((current) => ({
+                ...current,
+                [contactUserId]: (current[contactUserId] ?? 0) + 1,
+              }));
+            }
             setArchivedConversationIds((current) =>
               current.filter((contactId) => contactId !== contactUserId),
             );
@@ -274,7 +315,20 @@ export default function DirectMessages({
               .delete()
               .eq("owner_user_id", userId)
               .eq("contact_user_id", contactUserId);
-            refreshContacts();
+            refreshImmediately();
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "peso_messages" },
+        (payload) => {
+          const message = payload.new as PesoMessage;
+          if (
+            message.sender_user_id === conversationOwnerId ||
+            message.recipient_user_id === conversationOwnerId
+          ) {
+            refreshImmediately();
           }
         },
       )
@@ -282,7 +336,7 @@ export default function DirectMessages({
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "peso_messages" },
         () => {
-          refreshContacts();
+          refreshImmediately();
         },
       )
       .subscribe((status, subscriptionError) => {
@@ -306,7 +360,7 @@ export default function DirectMessages({
           }
         }
       });
-    const consistencyPoll = setInterval(refreshContacts, 10000);
+    const consistencyPoll = setInterval(refreshContacts, 3000);
 
     return () => {
       active = false;
@@ -314,7 +368,7 @@ export default function DirectMessages({
       if (fallbackPoll) clearInterval(fallbackPoll);
       void supabase.removeChannel(channel);
     };
-  }, [conversationOwnerId, refreshConversationContacts]);
+  }, [conversationOwnerId, refreshConversationContacts, refreshUnreadCounts]);
 
   const startConversationByEmail = async (
     event: FormEvent<HTMLFormElement>,
@@ -407,6 +461,11 @@ export default function DirectMessages({
                 : message,
             ),
           );
+          setUnreadCounts((current) => {
+            const next = { ...current };
+            delete next[selectedUserId];
+            return next;
+          });
         }
       }
 
@@ -439,6 +498,13 @@ export default function DirectMessages({
               current.filter((contactId) => contactId !== selectedUserId),
             );
             setConversationSection("active");
+            if (message.recipient_user_id === conversationOwnerId) {
+              setUnreadCounts((current) => {
+                const next = { ...current };
+                delete next[selectedUserId];
+                return next;
+              });
+            }
             void supabase
               .from("peso_message_archives")
               .delete()
@@ -777,7 +843,11 @@ export default function DirectMessages({
                   <div
                     key={contact.user_id}
                     className={`relative flex items-center border-b border-slate-100 transition ${
-                      selectedUserId === contact.user_id ? "bg-blue-50" : "hover:bg-slate-50"
+                      unreadCounts[contact.user_id]
+                        ? "bg-amber-50 ring-1 ring-inset ring-amber-200"
+                        : selectedUserId === contact.user_id
+                          ? "bg-blue-50"
+                          : "hover:bg-slate-50"
                     }`}
                   >
                     <button
@@ -786,11 +856,28 @@ export default function DirectMessages({
                         setPendingContact(null);
                         setSelectedUserId(contact.user_id);
                         setOpenConversationMenuId(null);
+                        setUnreadCounts((current) => {
+                          const next = { ...current };
+                          delete next[contact.user_id];
+                          return next;
+                        });
                       }}
                       className="min-w-0 flex-1 px-4 py-3 text-left"
                     >
-                      <span className="block truncate text-sm font-semibold text-slate-800">
-                        {contact.display_name}
+                      <span className="flex items-center gap-2">
+                        <span className="min-w-0 truncate text-sm font-semibold text-slate-800">
+                          {contact.display_name}
+                        </span>
+                        {(unreadCounts[contact.user_id] ?? 0) > 0 && (
+                          <span
+                            aria-label={`${unreadCounts[contact.user_id]} unread messages`}
+                            className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white"
+                          >
+                            {unreadCounts[contact.user_id] > 99
+                              ? "99+"
+                              : unreadCounts[contact.user_id]}
+                          </span>
+                        )}
                       </span>
                       <span className="mt-1 block text-xs text-slate-500">
                         {contact.role}
