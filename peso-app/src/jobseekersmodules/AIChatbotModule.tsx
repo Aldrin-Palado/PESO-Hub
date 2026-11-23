@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { invokePesoAI } from "../services/pesoAi";
 import { supabase } from "../services/supabase";
 
-const maxResumeBytes = 500_000;
+const maxResumeBytes = 1_000_000;
 
 function isResumeFileTypeValid(file: File, bytes: Uint8Array) {
   const extension = file.name.split(".").pop()?.toLowerCase();
@@ -69,7 +69,7 @@ export default function AIChatbotModule({
     let resume: { fileName: string; data: string } | undefined;
     if (resumeFile) {
       if (resumeFile.size > maxResumeBytes) {
-        setError("Resume files must be 500 KB or smaller.");
+        setError("Resume files must be 1 MB or smaller.");
         return;
       }
       const extension = resumeFile.name.split(".").pop()?.toLowerCase();
@@ -375,7 +375,7 @@ export default function AIChatbotModule({
           </label>
         )}
         <p className="mt-2 text-xs text-slate-400">
-          Upload PDF, DOC, or DOCX resumes up to 500 KB. Do not share passwords, codes, or
+          Upload PDF, DOC, or DOCX resumes up to 1 MB. Do not share passwords, codes, or
           sensitive personal information.
         </p>
       </form>

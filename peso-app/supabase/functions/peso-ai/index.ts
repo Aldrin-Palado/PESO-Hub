@@ -9,7 +9,7 @@ const corsHeaders = {
   "Access-Control-Max-Age": "86400",
 };
 
-const maxChatResumeBytes = 500_000;
+const maxChatResumeBytes = 1_000_000;
 const maxChatResumeTextLength = 30_000;
 const maxProfileTextLength = 4_000;
 const maxChatHistoryMessages = 6;
@@ -363,7 +363,7 @@ async function decodeChatResume(value: unknown): Promise<ChatResume> {
   if (value instanceof File) {
     fileName = value.name;
     if (value.size > maxChatResumeBytes) {
-      throw new Error("Resume files must be 500 KB or smaller.");
+      throw new Error("Resume files must be 1 MB or smaller.");
     }
     return decodeChatResumeBytes(fileName, new Uint8Array(await value.arrayBuffer()));
   }
@@ -383,7 +383,7 @@ async function decodeChatResume(value: unknown): Promise<ChatResume> {
     resume.data.length > Math.ceil(maxChatResumeBytes / 3) * 4 + 8 ||
     !/^[A-Za-z0-9+/]*={0,2}$/.test(resume.data)
   ) {
-    throw new Error("Resume files must be 500 KB or smaller.");
+    throw new Error("Resume files must be 1 MB or smaller.");
   }
 
   let binary: string;
@@ -393,7 +393,7 @@ async function decodeChatResume(value: unknown): Promise<ChatResume> {
     throw new Error("The uploaded resume data is invalid.");
   }
   if (binary.length > maxChatResumeBytes) {
-    throw new Error("Resume files must be 500 KB or smaller.");
+    throw new Error("Resume files must be 1 MB or smaller.");
   }
   bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
   fileName = resume.fileName;
@@ -409,7 +409,7 @@ function decodeChatResumeBytes(fileName: string, bytes: Uint8Array): ChatResume 
     throw new Error("Upload a PDF, DOC, or DOCX resume.");
   }
   if (bytes.length > maxChatResumeBytes) {
-    throw new Error("Resume files must be 500 KB or smaller.");
+    throw new Error("Resume files must be 1 MB or smaller.");
   }
   const pdf = new TextDecoder().decode(bytes.subarray(0, 5)) === "%PDF-";
   const doc = bytes.subarray(0, 8).join(",") === "208,207,17,224,161,177,26,225";

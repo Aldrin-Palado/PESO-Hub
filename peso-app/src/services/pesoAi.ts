@@ -35,7 +35,7 @@ export async function invokePesoAI<T>(
     if (error.context instanceof Response && error.context.status === 413) {
       throw new Error(
         typeof File !== "undefined" && resumeFile instanceof File
-          ? "The resume upload was rejected as too large. Try a smaller file (500 KB maximum) or describe your skills instead."
+          ? "The resume upload was rejected as too large. Try a smaller file (1 MB maximum) or describe your skills instead."
           : "The AI request was rejected as too large. Shorten your message and try again.",
       );
     }
