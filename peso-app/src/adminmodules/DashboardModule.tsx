@@ -221,11 +221,28 @@ const hasPendingReview = pendingEmployerCount > 0 || pendingApplicationCount > 0
                               ))}
                             </Pie>
                             <Tooltip
-                              contentStyle={{
-                                backgroundColor: "#FFFFFF",
-                                border: "1px solid #E2E8F0",
-                                borderRadius: 10,
-                                fontSize: 12,
+                              isAnimationActive={false}
+                              cursor={false}
+                              content={({ active, payload }) => {
+                                if (!active || !payload?.length) return null;
+                                const item = payload[0];
+                                const value =
+                                  typeof item.value === "number"
+                                    ? item.value
+                                    : Number(item.value || 0);
+                                return (
+                                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-center shadow-lg">
+                                    <p className="text-xs font-semibold text-amber-600">
+                                      {String(item.name)}
+                                    </p>
+                                    <p className="mt-1 text-sm font-bold text-slate-800">
+                                      {value}
+                                    </p>
+                                    <p className="text-[10px] text-slate-500">
+                                      Applications
+                                    </p>
+                                  </div>
+                                );
                               }}
                             />
                           </PieChart>
