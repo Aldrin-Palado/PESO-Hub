@@ -5,17 +5,17 @@ import ApplicationScopeToggle from "../components/ApplicationScopeToggle";
 import ApplicationArchiveTabs from "../components/ApplicationArchiveTabs";
 import ModuleScoreboard from "../components/ModuleScoreboard";
 import FilterDropdown from "../components/FilterDropdown";
+import ProfileAvatar from "../components/ProfileAvatar";
 import {
   isApplicationArchived,
   type ApplicationArchiveSection,
 } from "../utils/applicationArchive";
 import { getApplicationStatusStyles } from "../utils/applicationStatusStyles";
-import { getEmployerProfileLogo } from "../utils/employerProfileLogo";
-
 type Application = {
   id?: string;
   application_id?: string;
   job_seeker_id?: string;
+  applicant_user_id?: string | null;
   employer_id?: string;
   is_peso_application?: boolean;
   is_own_peso_application?: boolean;
@@ -261,24 +261,6 @@ export default function ApplicationsModule({
 
     return [...groups.entries()]
       .map(([key, groupApplications]) => {
-        const employerProfiles = new Map<
-          string,
-          { id: string; name: string; logoUrl: string | null }
-        >();
-        for (const application of groupApplications) {
-          if (!application.employer_id || employerProfiles.has(application.employer_id)) {
-            continue;
-          }
-          employerProfiles.set(application.employer_id, {
-            id: application.employer_id,
-            name: application.employer_name || "Employer",
-            logoUrl: getEmployerProfileLogo(
-              application.employer_logo_url,
-              application.employer_is_peso,
-            ),
-          });
-        }
-
         return {
           key,
           name: groupApplications[0].applicant_name || "Applicant",
@@ -286,7 +268,7 @@ export default function ApplicationsModule({
             groupApplications[0].applicant_email ||
             groupApplications[0].job_seeker_id ||
             "Email unavailable",
-          employerProfiles: [...employerProfiles.values()],
+          userId: groupApplications[0].applicant_user_id || null,
           applications: [...groupApplications].sort((first, second) => {
             const firstDate = new Date(
               first.date_applied || first.created_at || 0,
@@ -548,9 +530,19 @@ export default function ApplicationsModule({
               <section key={group.key} aria-label={`Applications for ${group.name}`}>
                 <header className="flex items-center justify-between gap-3 bg-slate-50 px-3 py-2.5 sm:px-4">
                   <div className="flex min-w-0 items-center gap-2.5">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#0759AE] text-[10px] font-bold text-white">
-                      {group.name.trim().charAt(0).toUpperCase()}
-                    </span>
+                    {group.userId ? (
+                      <ProfileAvatar
+                        key={group.userId}
+                        userId={group.userId}
+                        fullName={group.name}
+                        size="small"
+                        showControls={false}
+                      />
+                    ) : (
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#0759AE] text-[10px] font-bold text-white">
+                        {group.name.trim().charAt(0).toUpperCase()}
+                      </span>
+                    )}
                     <div className="min-w-0">
                       <p className="truncate text-[11px] font-bold text-slate-800">
                         {group.name}
@@ -559,33 +551,6 @@ export default function ApplicationsModule({
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <div className="flex items-center -space-x-1.5" aria-label="Employers">
-                      {group.employerProfiles.slice(0, 3).map((employer) => (
-                        <span
-                          key={employer.id}
-                          title={employer.name}
-                          className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-lg border-2 border-white bg-slate-100 text-[9px] font-bold text-slate-600"
-                        >
-                          {employer.logoUrl ? (
-                            <img
-                              src={employer.logoUrl}
-                              alt={`${employer.name} logo`}
-                              className="h-full w-full object-contain"
-                            />
-                          ) : (
-                            employer.name.trim().charAt(0).toUpperCase()
-                          )}
-                        </span>
-                      ))}
-                      {group.employerProfiles.length > 3 && (
-                        <span
-                          title={`${group.employerProfiles.length - 3} more employers`}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg border-2 border-white bg-slate-100 text-[8px] font-bold text-slate-600"
-                        >
-                          +{group.employerProfiles.length - 3}
-                        </span>
-                      )}
-                    </div>
                     <button
                       type="button"
                       aria-expanded={expandedApplicants.has(group.key)}

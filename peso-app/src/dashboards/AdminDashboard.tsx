@@ -1806,6 +1806,7 @@ export default function AdminDashboard() {
 
           return {
             ...application,
+            applicant_user_id: seeker?.user_id || null,
             applicant_name:
               application.applicant_name ?? seeker?.full_name ?? null,
             applicant_email:
