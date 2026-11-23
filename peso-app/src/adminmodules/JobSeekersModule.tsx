@@ -1142,18 +1142,25 @@ function ScreeningModal({
               value={getVerificationStatus(jobSeeker).replace("_", " ")}
             />
             <ScreeningField label="Registered On" value={jobSeeker.created_at ? new Date(jobSeeker.created_at).toLocaleString() : "-"} />
-            <ScreeningField label="Resume" value={jobSeeker.resume_url ? "Uploaded" : "Not uploaded"} />
-            <div className="flex items-end">
-              {jobSeeker.resume_url && (
-                <button
-                  type="button"
-                  onClick={() => void onOpenResume(jobSeeker, rowId)}
-                  disabled={openingResumeId === rowId}
-                  className="rounded-full border border-[#203F8B] px-4 py-2 text-xs font-semibold text-[#203F8B] transition hover:bg-blue-50 disabled:cursor-wait disabled:opacity-60"
-                >
-                  {openingResumeId === rowId ? "Opening..." : "View Resume"}
-                </button>
-              )}
+            <div className="min-w-0">
+              <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-400">
+                Resume
+              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <p className="text-sm text-slate-700">
+                  {jobSeeker.resume_url ? "Uploaded" : "Not uploaded"}
+                </p>
+                {jobSeeker.resume_url && (
+                  <button
+                    type="button"
+                    onClick={() => void onOpenResume(jobSeeker, rowId)}
+                    disabled={openingResumeId === rowId}
+                    className="rounded-full border border-[#203F8B] px-3 py-1 text-xs font-semibold text-[#203F8B] transition hover:bg-blue-50 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {openingResumeId === rowId ? "Opening..." : "View Resume"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
