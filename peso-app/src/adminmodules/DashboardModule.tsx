@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { AdminModule } from "../components/AdminSidebar";
 import AppIcon, { type AppIconName } from "../components/AppIcon";
 import {
@@ -74,6 +75,10 @@ export default function DashboardModule({
   monthlyApplicationTrend,
   onNavigate,
 }: Props) {
+  const [hoveredApplicationStatus, setHoveredApplicationStatus] = useState<{
+    label: string;
+    value: number;
+  } | null>(null);
   const isAdmin = account?.role === "admin";
   const canViewApplications =
     isAdmin || permissions.includes("Applications");
@@ -215,38 +220,33 @@ const hasPendingReview = pendingEmployerCount > 0 || pendingApplicationCount > 0
                               innerRadius={52}
                               outerRadius={78}
                               paddingAngle={3}
+                              onMouseEnter={(entry) =>
+                                setHoveredApplicationStatus({
+                                  label: String(entry.name ?? ""),
+                                  value: Number(entry.value ?? 0),
+                                })
+                              }
+                              onMouseLeave={() => setHoveredApplicationStatus(null)}
                             >
                               {applicationStatusSeries.map((entry) => (
                                 <Cell key={entry.name} fill={entry.color} />
                               ))}
                             </Pie>
-                            <Tooltip
-                              isAnimationActive={false}
-                              cursor={false}
-                              content={({ active, payload }) => {
-                                if (!active || !payload?.length) return null;
-                                const item = payload[0];
-                                const value =
-                                  typeof item.value === "number"
-                                    ? item.value
-                                    : Number(item.value || 0);
-                                return (
-                                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-center shadow-lg">
-                                    <p className="text-xs font-semibold text-amber-600">
-                                      {String(item.name)}
-                                    </p>
-                                    <p className="mt-1 text-sm font-bold text-slate-800">
-                                      {value}
-                                    </p>
-                                    <p className="text-[10px] text-slate-500">
-                                      Applications
-                                    </p>
-                                  </div>
-                                );
-                              }}
-                            />
                           </PieChart>
                         </ResponsiveContainer>
+                        {hoveredApplicationStatus && (
+                          <div className="pointer-events-none absolute left-1/2 top-1 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-center shadow-lg">
+                            <p className="text-xs font-semibold text-amber-600">
+                              {hoveredApplicationStatus.label}
+                            </p>
+                            <p className="mt-1 text-sm font-bold text-slate-800">
+                              {hoveredApplicationStatus.value}
+                            </p>
+                            <p className="text-[10px] text-slate-500">
+                              Applications
+                            </p>
+                          </div>
+                        )}
                         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                           <span className="text-2xl font-bold text-slate-800">
                             {displayedApplicationTotal}
