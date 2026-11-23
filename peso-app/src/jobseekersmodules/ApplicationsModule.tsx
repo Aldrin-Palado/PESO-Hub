@@ -335,12 +335,14 @@ export default function ApplicationsModule({
   };
 
   const cancelEditingApplication = () => {
+    setSelectedApplication(null);
     setEditingApplication(false);
     setEditValues(null);
     setEditResumeFile(null);
     setEditQualificationFiles([]);
     setKeptQualificationFiles([]);
     setEditError("");
+    setResumeError("");
   };
 
   const saveApplicationChanges = async (event: FormEvent<HTMLFormElement>) => {
