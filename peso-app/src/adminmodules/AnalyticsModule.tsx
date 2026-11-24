@@ -1339,87 +1339,90 @@ jobPosts.forEach((job) => {
               </p>
             )}
           </div>
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="text-xs font-semibold text-slate-600">
-              Applied from
-              <input
-                type="date"
-                value={applicationStartDate}
-                max={applicationEndDate || undefined}
-                onChange={(event) => {
-                  setApplicationPeriod("");
-                  setApplicationStartDate(event.target.value);
-                }}
-                className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
-              />
-            </label>
-            <label className="text-xs font-semibold text-slate-600">
-              Quick period
-              <select
-                aria-label="Filter analytics by period"
-                value={applicationPeriod}
-                onChange={(event) => {
-                  const selectedPeriod = APPLICATION_PERIOD_OPTIONS.find(
-                    (option) => option.value === event.target.value,
-                  );
-                  if (selectedPeriod) {
-                    const range = getApplicationPeriodRange(
-                      selectedPeriod.value,
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="text-xs font-semibold text-slate-600">
+                Applied to
+                <input
+                  type="date"
+                  value={applicationEndDate}
+                  min={applicationStartDate || undefined}
+                  onChange={(event) => {
+                    setApplicationPeriod("");
+                    setApplicationEndDate(event.target.value);
+                  }}
+                  className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
+                />
+              </label>
+              <label className="text-xs font-semibold text-slate-600">
+                Applied from
+                <input
+                  type="date"
+                  value={applicationStartDate}
+                  max={applicationEndDate || undefined}
+                  onChange={(event) => {
+                    setApplicationPeriod("");
+                    setApplicationStartDate(event.target.value);
+                  }}
+                  className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
+                />
+              </label>
+              <label className="text-xs font-semibold text-slate-600">
+                Quick period
+                <select
+                  aria-label="Filter analytics by period"
+                  value={applicationPeriod}
+                  onChange={(event) => {
+                    const selectedPeriod = APPLICATION_PERIOD_OPTIONS.find(
+                      (option) => option.value === event.target.value,
                     );
-                    setApplicationPeriod(selectedPeriod.value);
-                    setApplicationStartDate(range.start);
-                    setApplicationEndDate(range.end);
-                    setApplicationDateRange(range);
-                    setSelectedInsight(null);
-                  }
-                }}
-                className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
-              >
-                <option value="" disabled>
-                  Select period
-                </option>
-                {APPLICATION_PERIOD_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
+                    if (selectedPeriod) {
+                      const range = getApplicationPeriodRange(
+                        selectedPeriod.value,
+                      );
+                      setApplicationPeriod(selectedPeriod.value);
+                      setApplicationStartDate(range.start);
+                      setApplicationEndDate(range.end);
+                      setApplicationDateRange(range);
+                      setSelectedInsight(null);
+                    }
+                  }}
+                  className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
+                >
+                  <option value="" disabled>
+                    Select period
                   </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs font-semibold text-slate-600">
-              Applied to
-              <input
-                type="date"
-                value={applicationEndDate}
-                min={applicationStartDate || undefined}
-                onChange={(event) => {
+                  {APPLICATION_PERIOD_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                disabled={
+                  !applicationStartDate ||
+                  !applicationEndDate ||
+                  applicationStartDate > applicationEndDate
+                }
+                onClick={() => {
+                  setApplicationDateRange({
+                    start: applicationStartDate,
+                    end: applicationEndDate,
+                  });
                   setApplicationPeriod("");
-                  setApplicationEndDate(event.target.value);
+                  setSelectedInsight(null);
                 }}
-                className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
-              />
-            </label>
-            <button
-              type="button"
-              disabled={
-                !applicationStartDate ||
-                !applicationEndDate ||
-                applicationStartDate > applicationEndDate
-              }
-              onClick={() => {
-                setApplicationDateRange({
-                  start: applicationStartDate,
-                  end: applicationEndDate,
-                });
-                setApplicationPeriod("");
-                setSelectedInsight(null);
-              }}
-              className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Apply date range
-            </button>
-            {(applicationStartDate ||
-              applicationEndDate ||
-              applicationDateRange) && (
+                className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Apply date range
+              </button>
+              {(applicationStartDate ||
+                applicationEndDate ||
+                applicationDateRange) && (
               <button
                 type="button"
                 onClick={() => {
@@ -1433,7 +1436,8 @@ jobPosts.forEach((job) => {
               >
                 Clear
               </button>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </section>
