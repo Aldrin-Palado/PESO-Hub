@@ -93,6 +93,26 @@ type ApplicationDateRange = {
   end: string;
 };
 
+type ApplicationPeriod =
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "quarterly"
+  | "semi-annual"
+  | "annual"
+  | "year-to-date";
+
+const APPLICATION_PERIOD_OPTIONS: { value: ApplicationPeriod; label: string }[] =
+  [
+    { value: "daily", label: "Daily" },
+    { value: "weekly", label: "Weekly" },
+    { value: "monthly", label: "Monthly" },
+    { value: "quarterly", label: "Quarterly" },
+    { value: "semi-annual", label: "Semi-Annual" },
+    { value: "annual", label: "Annual" },
+    { value: "year-to-date", label: "Year-to-Date" },
+  ];
+
 type SelectedInsight = {
   category: InsightCategory;
   label: string;
@@ -233,6 +253,59 @@ function formatReportDate(value?: string | null): string {
   });
 }
 
+function formatDateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getApplicationPeriodRange(period: ApplicationPeriod): ApplicationDateRange {
+  const today = new Date();
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let start: Date;
+
+  switch (period) {
+    case "daily":
+      start = end;
+      break;
+    case "weekly":
+      start = new Date(end);
+      start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+      break;
+    case "monthly":
+      start = new Date(end.getFullYear(), end.getMonth(), 1);
+      break;
+    case "quarterly":
+      start = new Date(
+        end.getFullYear(),
+        Math.floor(end.getMonth() / 3) * 3,
+        1,
+      );
+      break;
+    case "semi-annual":
+      start = new Date(
+        end.getFullYear(),
+        Math.floor(end.getMonth() / 6) * 6,
+        1,
+      );
+      break;
+    case "annual":
+      start = new Date(end);
+      start.setFullYear(start.getFullYear() - 1);
+      start.setDate(start.getDate() + 1);
+      break;
+    case "year-to-date":
+      start = new Date(end.getFullYear(), 0, 1);
+      break;
+  }
+
+  return {
+    start: formatDateInputValue(start),
+    end: formatDateInputValue(end),
+  };
+}
+
 function createApplicationMonthBuckets(
   range: ApplicationDateRange | null,
 ) {
@@ -296,6 +369,8 @@ export default function AnalyticsModule({
   const [applicationEndDate, setApplicationEndDate] = useState("");
   const [applicationDateRange, setApplicationDateRange] =
     useState<ApplicationDateRange | null>(null);
+  const [applicationPeriod, setApplicationPeriod] =
+    useState<ApplicationPeriod | "">("");
   const applicationsInRange = useMemo(() => {
     if (!applicationDateRange) return applications;
 
@@ -1266,12 +1341,47 @@ jobPosts.forEach((job) => {
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <label className="text-xs font-semibold text-slate-600">
+              Quick period
+              <select
+                aria-label="Filter analytics by period"
+                value={applicationPeriod}
+                onChange={(event) => {
+                  const selectedPeriod = APPLICATION_PERIOD_OPTIONS.find(
+                    (option) => option.value === event.target.value,
+                  );
+                  if (selectedPeriod) {
+                    const range = getApplicationPeriodRange(
+                      selectedPeriod.value,
+                    );
+                    setApplicationPeriod(selectedPeriod.value);
+                    setApplicationStartDate(range.start);
+                    setApplicationEndDate(range.end);
+                    setApplicationDateRange(range);
+                    setSelectedInsight(null);
+                  }
+                }}
+                className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
+              >
+                <option value="" disabled>
+                  Select period
+                </option>
+                {APPLICATION_PERIOD_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-slate-600">
               Applied from
               <input
                 type="date"
                 value={applicationStartDate}
                 max={applicationEndDate || undefined}
-                onChange={(event) => setApplicationStartDate(event.target.value)}
+                onChange={(event) => {
+                  setApplicationPeriod("");
+                  setApplicationStartDate(event.target.value);
+                }}
                 className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
               />
             </label>
@@ -1281,7 +1391,10 @@ jobPosts.forEach((job) => {
                 type="date"
                 value={applicationEndDate}
                 min={applicationStartDate || undefined}
-                onChange={(event) => setApplicationEndDate(event.target.value)}
+                onChange={(event) => {
+                  setApplicationPeriod("");
+                  setApplicationEndDate(event.target.value);
+                }}
                 className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
               />
             </label>
@@ -1297,6 +1410,7 @@ jobPosts.forEach((job) => {
                   start: applicationStartDate,
                   end: applicationEndDate,
                 });
+                setApplicationPeriod("");
                 setSelectedInsight(null);
               }}
               className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1312,6 +1426,7 @@ jobPosts.forEach((job) => {
                   setApplicationStartDate("");
                   setApplicationEndDate("");
                   setApplicationDateRange(null);
+                  setApplicationPeriod("");
                   setSelectedInsight(null);
                 }}
                 className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
