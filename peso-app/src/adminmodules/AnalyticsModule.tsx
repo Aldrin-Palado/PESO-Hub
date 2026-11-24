@@ -1341,6 +1341,19 @@ jobPosts.forEach((job) => {
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <label className="text-xs font-semibold text-slate-600">
+              Applied from
+              <input
+                type="date"
+                value={applicationStartDate}
+                max={applicationEndDate || undefined}
+                onChange={(event) => {
+                  setApplicationPeriod("");
+                  setApplicationStartDate(event.target.value);
+                }}
+                className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
+              />
+            </label>
+            <label className="text-xs font-semibold text-slate-600">
               Quick period
               <select
                 aria-label="Filter analytics by period"
@@ -1371,19 +1384,6 @@ jobPosts.forEach((job) => {
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="text-xs font-semibold text-slate-600">
-              Applied from
-              <input
-                type="date"
-                value={applicationStartDate}
-                max={applicationEndDate || undefined}
-                onChange={(event) => {
-                  setApplicationPeriod("");
-                  setApplicationStartDate(event.target.value);
-                }}
-                className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
-              />
             </label>
             <label className="text-xs font-semibold text-slate-600">
               Applied to
